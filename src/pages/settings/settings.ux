@@ -1,0 +1,389 @@
+<import name="page-header" src="@components/PageHeader/PageHeader.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{ scrclass }}" scroll-y="true" bounces="true">
+      <page-header title="设置"></page-header>
+
+      <div class="settings-list" style="margin-top: {{ contentTop }}px;">
+        <div class="row" @click="toggleMode">
+          <text class="row-title">接口</text>
+          <text class="row-value {{ isDeepSeek ? '' : 'value-on' }}">{{ modeName }}</text>
+        </div>
+
+        <div class="row" @click="openApiKey">
+          <text class="row-title">API Key</text>
+          <text class="row-value">{{ keyText }}</text>
+        </div>
+
+        <div class="row" @click="openModels">
+          <text class="row-title">模型</text>
+          <text class="row-value row-model">{{ modelLabel }}</text>
+        </div>
+
+        <div class="row" @click="toggleThinking">
+          <text class="row-title">深度思考</text>
+          <text class="row-value {{ thinking ? 'value-on' : '' }}">{{ thinking ? "开" : "关" }}</text>
+        </div>
+
+        <div class="row" @click="cycleLength">
+          <text class="row-title">回答长度</text>
+          <text class="row-value">{{ lengthLabel }}</text>
+        </div>
+
+        <div class="row" if="{{ isDeepSeek }}" @click="toggleSearch">
+          <text class="row-title">联网搜索</text>
+          <text class="row-value {{ searchOn ? 'value-on' : '' }}">{{ searchOn ? "开" : "关" }}</text>
+        </div>
+
+        <div class="row" if="{{ isDeepSeek && searchOn }}" @click="toggleAskSearch">
+          <text class="row-title">搜索前确认</text>
+          <text class="row-value {{ askBeforeSearch ? 'value-on' : '' }}">{{ askBeforeSearch ? "开" : "关" }}</text>
+        </div>
+
+        <div class="row" @click="toggleBackAnim">
+          <text class="row-title">返回动画</text>
+          <text class="row-value {{ backAnim ? 'value-on' : '' }}">{{ backAnim ? "开" : "关" }}</text>
+        </div>
+
+        <div class="row" @click="openHistory">
+          <text class="row-title">历史会话</text>
+          <text class="row-value">查看 ›</text>
+        </div>
+
+        <div class="row" @click="openStats">
+          <text class="row-title">Token 统计</text>
+          <text class="row-value">{{ tokenText }}</text>
+        </div>
+
+        <div class="row" if="{{ isDeepSeek }}" @click="openBalance">
+          <text class="row-title">查询余额</text>
+          <text class="row-value">查看 ›</text>
+        </div>
+
+        <div class="row" @click="openAbout">
+          <text class="row-title">关于</text>
+          <text class="row-value">落幕. ›</text>
+        </div>
+
+        <div class="row" @click="clearHistory">
+          <text class="row-title">{{ confirmClear ? "再点一次确认" : "清空全部会话" }}</text>
+          <text class="row-value {{ confirmClear ? 'value-danger' : '' }}">{{ confirmClear ? "确认清除" : "清除" }}</text>
+        </div>
+      </div>
+
+      <text class="footer">开发者：落幕. · 内置接口免填 Key</text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+import router from "@system.router"
+import { getStats, formatNumber } from "../../lib/stats"
+import { clearAllSessions } from "../../lib/sessions"
+import { getProfile } from "../../lib/deviceProfile"
+import { maskApiKey } from "../../lib/apiKeyStore"
+import { getProviderInfo, getModel, getApiKey } from "../../deepseek/client"
+
+// 非思考模式下的回答上限；深度思考走单独的更大预算
+const LENGTHS = [
+  { value: 800, label: "短" },
+  { value: 1200, label: "标准" },
+  { value: 2000, label: "长" }
+]
+
+/**
+ * 取配置对象。正常路径就是 global.config，但启动早期它可能还没赋值，
+ * 这时退回 store 单例（自带 DEFAULT_CONFIG），保证 read/write 永远可用。
+ * 之前这里直接写 global.config.read，一旦启动流程出岔子，
+ * 页面 onInit 抛异常就会白屏或卡在启动页。
+ */
+function configOf() {
+  try {
+    if (global.config && typeof global.config.read === "function") return global.config
+    if (global.__dsStore && typeof global.__dsStore.read === "function") return global.__dsStore
+  } catch (e) {
+    // 忽略
+  }
+  return {
+    read: (f) => f({}),
+    write: () => Promise.resolve()
+  }
+}
+
+/** 模型 id 去掉 vendor 前缀，设置行里才放得下 */
+function shortModel(id) {
+  if (!id) return "未选择"
+  const slash = id.indexOf("/")
+  return slash > 0 ? id.slice(slash + 1) : id
+}
+
+export default {
+  private: {
+    scrclass: "",
+    keyText: "未设置",
+    model: "deepseek-flash",
+    modelLabel: "",
+    modeName: "内置免费",
+    isDeepSeek: false,
+    thinking: false,
+    lengthLabel: "标准",
+    searchOn: true,
+    // 模型判断需要联网时先问一句，关掉则自动搜
+    askBeforeSearch: true,
+    backAnim: true,
+    tokenText: "暂无记录",
+    confirmClear: false,
+    contentTop: 0
+  },
+
+  onInit() {
+    if (global.ui && global.ui.InitPage) global.ui.InitPage(this, "pages/settings")
+    const profile = global.UI_PROFILE || getProfile()
+    this.contentTop = profile.contentTop
+    this.refresh()
+  },
+
+  onShow() {
+    this.refresh()
+    this.confirmClear = false
+    // 历史页选中会话后会自动退回：这里再退一步回首页，让首页加载该会话。
+    // 直接 back，不走返回动画——这是功能性的连续退两步，再等一轮动画会明显变慢。
+    if (global.__openSession) {
+      global.__openSession = false
+      setTimeout(() => {
+        router.back()
+      }, 350)
+    }
+  },
+
+  refresh() {
+    const info = getProviderInfo()
+    this.modeName = info.name
+    this.isDeepSeek = info.id === "deepseek"
+    const key = getApiKey()
+    this.keyText = this.isDeepSeek ? (key ? maskApiKey(key) : "未设置") : "无需填写"
+    this.model = getModel()
+    this.modelLabel = shortModel(this.model)
+    this.thinking = configOf().read(c => c.deepseekThinking)
+    this.searchOn = configOf().read(c => c.deepseekSearch)
+    this.askBeforeSearch = configOf().read(c => c.deepseekAskSearch) !== false
+    this.backAnim = configOf().read(c => c.deepseekBackAnim) !== false
+    const maxTokens = Number(configOf().read(c => c.deepseekMaxTokens)) || 1200
+    let label = LENGTHS[1].label
+    for (let i = 0; i < LENGTHS.length; i++) {
+      if (LENGTHS[i].value === maxTokens) {
+        label = LENGTHS[i].label
+        break
+      }
+    }
+    this.lengthLabel = label
+    const stats = getStats()
+    this.tokenText = stats.total > 0 ? "累计 " + formatNumber(stats.total) : "暂无记录"
+  },
+
+  /** 内置免费 ↔ DeepSeek 一键切换 */
+  toggleMode() {
+    const next = this.isDeepSeek ? "builtin" : "deepseek"
+    configOf().write(cfg => {
+      cfg.apiMode = next
+    })
+    this.refresh()
+    if (next === "builtin") {
+      prompt.showToast({ message: "已切换到内置免费接口" })
+    } else {
+      prompt.showToast({
+        message: getApiKey() ? "已切换到 DeepSeek" : "已切换，请先填 API Key"
+      })
+    }
+  },
+
+  openApiKey() {
+    if (!this.isDeepSeek) {
+      prompt.showToast({ message: "内置接口无需 Key，可先切换到 DeepSeek" })
+      return
+    }
+    router.push({ uri: "pages/settings/apiKey" })
+  },
+
+  openBalance() {
+    router.push({ uri: "pages/balance" })
+  },
+
+  openHistory() {
+    router.push({ uri: "pages/history" })
+  },
+
+  openStats() {
+    router.push({ uri: "pages/stats" })
+  },
+
+  openAbout() {
+    router.push({ uri: "pages/about" })
+  },
+
+  openModels() {
+    router.push({ uri: "pages/settings/models" })
+  },
+
+  toggleThinking() {
+    this.thinking = !this.thinking
+    configOf().write(cfg => {
+      cfg.deepseekThinking = this.thinking
+    })
+  },
+
+  cycleLength() {
+    const current = Number(configOf().read(c => c.deepseekMaxTokens)) || 1200
+    let index = 1
+    for (let i = 0; i < LENGTHS.length; i++) {
+      if (LENGTHS[i].value === current) {
+        index = i
+        break
+      }
+    }
+    const next = LENGTHS[(index + 1) % LENGTHS.length]
+    this.lengthLabel = next.label
+    configOf().write(cfg => {
+      cfg.deepseekMaxTokens = next.value
+    })
+    prompt.showToast({ message: `回答长度：${next.label}` })
+  },
+
+  toggleSearch() {
+    this.searchOn = !this.searchOn
+    configOf().write(cfg => {
+      cfg.deepseekSearch = this.searchOn
+    })
+  },
+
+  toggleAskSearch() {
+    this.askBeforeSearch = !this.askBeforeSearch
+    configOf().write(cfg => {
+      cfg.deepseekAskSearch = this.askBeforeSearch
+    })
+  },
+
+  toggleBackAnim() {
+    this.backAnim = !this.backAnim
+    configOf().write(cfg => {
+      cfg.deepseekBackAnim = this.backAnim
+    })
+    prompt.showToast({ message: this.backAnim ? "已开启返回动画" : "已关闭返回动画" })
+  },
+
+  clearHistory() {
+    if (!this.confirmClear) {
+      this.confirmClear = true
+      prompt.showToast({ message: "再点一次确认清空全部会话" })
+      setTimeout(() => {
+        this.confirmClear = false
+      }, 3000)
+      return
+    }
+    clearAllSessions()
+    this.confirmClear = false
+    this.refresh()
+    prompt.showToast({ message: "已清空全部会话" })
+  },
+
+  onBackPress() {
+    if (global.ui && global.ui.OnBackPressTriggered) {
+      global.ui.OnBackPressTriggered()
+      return true
+    }
+    return false
+  }
+}
+</script>
+
+<style lang="less">
+@import "src/less/global.less";
+
+.settings-list {
+  width: 92%;
+  flex-direction: column;
+  margin-top: 14px;
+}
+
+.row {
+  width: 100%;
+  height: 104px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 28px;
+  padding-right: 28px;
+  border-radius: 36px;
+  background-color: #1e1e1e;
+  margin-bottom: 10px;
+}
+
+.row-title {
+  flex-shrink: 0;
+  font-size: 32px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.row-value {
+  flex-shrink: 1;
+  max-width: 220px;
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.55);
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.row-model {
+  max-width: 250px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.value-on {
+  color: #4da3ff;
+}
+
+.value-danger {
+  color: #ff7875;
+}
+
+.footer {
+  margin-top: 24px;
+  margin-bottom: 60px;
+  width: 92%;
+  font-size: 22px;
+  line-height: 32px;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+}
+
+@media screen and (shape: circle) {
+  .settings-list {
+    width: 86%;
+  }
+  .footer {
+    width: 86%;
+  }
+}
+
+/* 手环 9 Pro / 10 Pro 等窄屏：文字按屏宽缩小，避免行内文字被挤爆 */
+@media (max-width: 190) {
+  .row {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+  .row-title {
+    font-size: 24px;
+  }
+  .row-value {
+    font-size: 18px;
+    max-width: 150px;
+  }
+  .footer {
+    font-size: 19px;
+    line-height: 28px;
+  }
+}
+</style>

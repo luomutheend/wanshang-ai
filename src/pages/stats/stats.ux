@@ -1,0 +1,255 @@
+<import name="page-header" src="@components/PageHeader/PageHeader.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{ scrclass }}" scroll-y="true" bounces="true">
+      <page-header title="Token 统计"></page-header>
+      <div style="height: {{ contentTop }}px; width: 100%;"></div>
+
+      <div class="hero">
+        <text class="hero-label">累计消耗</text>
+        <text class="hero-value">{{ totalText }}</text>
+        <text class="hero-unit">tokens</text>
+      </div>
+
+      <div class="card">
+        <div class="line">
+          <text class="line-label">输入 tokens</text>
+          <text class="line-value">{{ promptText }}</text>
+        </div>
+        <div class="line">
+          <text class="line-label">输出 tokens</text>
+          <text class="line-value">{{ completionText }}</text>
+        </div>
+        <div class="line">
+          <text class="line-label">对话次数</text>
+          <text class="line-value">{{ requestsText }}</text>
+        </div>
+        <div class="line" if="{{ estimatedText !== '0' }}">
+          <text class="line-label">其中估算</text>
+          <text class="line-value">{{ estimatedText }} 次</text>
+        </div>
+      </div>
+
+      <div class="card">
+        <text class="card-title">最近一次</text>
+        <div class="line">
+          <text class="line-label">输入 / 输出</text>
+          <text class="line-value">{{ lastInText }} / {{ lastOutText }}</text>
+        </div>
+        <div class="line">
+          <text class="line-label">合计</text>
+          <text class="line-value">{{ lastTotalText }}</text>
+        </div>
+        <div class="line">
+          <text class="line-label">时间</text>
+          <text class="line-value">{{ lastTimeText }}</text>
+        </div>
+      </div>
+
+      <text class="note">{{ noteText }}</text>
+
+      <text class="reset" @click="reset">重置统计</text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+import { getStats, resetStats, formatNumber, formatStatsTime } from "../../lib/stats"
+import { getProfile } from "../../lib/deviceProfile"
+
+export default {
+  private: {
+    scrclass: "",
+    contentTop: 0,
+    totalText: "0",
+    promptText: "0",
+    completionText: "0",
+    requestsText: "0",
+    estimatedText: "0",
+    lastInText: "0",
+    lastOutText: "0",
+    lastTotalText: "0",
+    lastTimeText: "—",
+    noteText: "统计只保存在本机"
+  },
+
+  onInit() {
+    if (global.ui && global.ui.InitPage) global.ui.InitPage(this, "pages/stats")
+    const profile = global.UI_PROFILE || getProfile()
+    this.contentTop = profile.contentTop
+  },
+
+  onShow() {
+    this.refresh()
+  },
+
+  refresh() {
+    const stats = getStats()
+    this.totalText = formatNumber(stats.total)
+    this.promptText = formatNumber(stats.prompt)
+    this.completionText = formatNumber(stats.completion)
+    this.requestsText = String(stats.requests)
+    this.estimatedText = String(stats.estimated || 0)
+    this.lastInText = formatNumber(stats.lastPrompt)
+    this.lastOutText = formatNumber(stats.lastCompletion)
+    this.lastTotalText = formatNumber(stats.lastTotal)
+    this.lastTimeText = formatStatsTime(stats.lastAt)
+    // 接口没回 usage 时按字符估算，明确标出来，避免误以为都是官方计数
+    this.noteText = stats.estimated
+      ? `统计只保存在本机；其中 ${stats.estimated} 次按字符估算`
+      : "统计只保存在本机，按接口返回的 usage 累计"
+  },
+
+  reset() {
+    resetStats()
+    this.refresh()
+    prompt.showToast({ message: "统计已重置" })
+  },
+
+  onBackPress() {
+    if (global.ui && global.ui.OnBackPressTriggered) {
+      global.ui.OnBackPressTriggered()
+      return true
+    }
+    return false
+  }
+}
+</script>
+
+<style lang="less">
+@import "src/less/global.less";
+
+.hero {
+  width: 92%;
+  height: 210px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 38px;
+  background-color: #1e1e1e;
+  margin-top: 6px;
+  margin-bottom: 14px;
+}
+
+.hero-label {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.hero-value {
+  margin-top: 8px;
+  font-size: 60px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.hero-unit {
+  margin-top: 2px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.card {
+  width: 92%;
+  flex-direction: column;
+  padding: 24px 28px;
+  border-radius: 34px;
+  background-color: #1e1e1e;
+  margin-bottom: 14px;
+}
+
+.card-title {
+  font-size: 26px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 6px;
+}
+
+.line {
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.line-label {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.line-value {
+  font-size: 26px;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.note {
+  width: 88%;
+  margin-top: 8px;
+  font-size: 21px;
+  line-height: 30px;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+}
+
+.reset {
+  width: 250px;
+  height: 68px;
+  line-height: 68px;
+  text-align: center;
+  margin-top: 22px;
+  margin-bottom: 60px;
+  border-radius: 34px;
+  background-color: rgba(255, 255, 255, 0.14);
+  font-size: 25px;
+  color: #ffffff;
+}
+
+@media screen and (shape: circle) {
+  .hero {
+    width: 86%;
+  }
+  .card {
+    width: 86%;
+  }
+  .note {
+    width: 80%;
+  }
+}
+
+/* 手环窄屏：数值卡按屏宽缩小 */
+@media (max-width: 190) {
+  .hero {
+    height: 160px;
+  }
+  .hero-label {
+    font-size: 20px;
+  }
+  .hero-value {
+    font-size: 44px;
+  }
+  .hero-unit {
+    font-size: 17px;
+  }
+  .card-title {
+    font-size: 21px;
+  }
+  .line-label {
+    font-size: 19px;
+  }
+  .line-value {
+    font-size: 21px;
+  }
+  .note {
+    font-size: 17px;
+    line-height: 26px;
+  }
+  .reset {
+    width: 200px;
+    height: 60px;
+    line-height: 60px;
+    font-size: 21px;
+  }
+}
+</style>

@@ -1,0 +1,34 @@
+{
+  "name": "wanshang-ai",
+  "version": "1.1.0",
+  "description": "腕上AI —— 小米 Vela 手表上的 AI 助手快应用，支持 DeepSeek 官方接口与自定义 OpenAI 兼容端点、联网搜索、模型切换",
+  "engines": {
+    "node": ">=8.10"
+  },
+  "license": "AGPL-3.0-only",
+  "keywords": [
+    "vela",
+    "quickapp",
+    "xiaomi",
+    "smartwatch",
+    "wearable",
+    "ai",
+    "deepseek",
+    "llm"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/setup-key.js",
+    "start": "aiot start --watch --enable-protobuf true",
+    "build": "aiot build --enable-protobuf",
+    "release": "aiot release --enable-protobuf && node scripts/verify-rpk-signature.js",
+    "release:s5": "aiot release --enable-jsc && node scripts/verify-rpk-signature.js --allow-missing",
+    "verify:sign": "node scripts/verify-rpk-signature.js"
+  },
+  "devDependencies": {
+    "@aiot-toolkit/jsc": "^1.0.3",
+    "aiot-toolkit": "^2.0.5"
+  },
+  "dependencies": {
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,13 @@
+# 统一换行符，避免 Windows 上 clone 后整个仓库显示为修改
+* text=auto eol=lf
+
+# 二进制资源
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.rpk binary
+*.woff2 binary
+
+# 词库是单行大 JSON，别让 diff 卡死
+src/components/InputMethod/assets/dictionary/*.txt -diff linguist-vendored

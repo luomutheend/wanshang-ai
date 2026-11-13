@@ -1,0 +1,236 @@
+<import name="page-header" src="@components/PageHeader/PageHeader.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{ scrclass }}" scroll-y="true" bounces="true">
+      <page-header title="模型" right-text="刷新" @righttap="refresh"></page-header>
+      <text class="tip" style="margin-top: {{ contentTop }}px;">{{ subText }}</text>
+
+      <div class="row {{ $item.id === current ? 'row-on' : '' }}" for="{{ models }}" @click="pick($item.id)">
+        <text class="name">{{ $item.id }}</text>
+        <text class="check" if="{{ $item.id === current }}">✓</text>
+      </div>
+
+      <div class="state" if="{{ loading && !models.length }}">
+        <text class="state-title">正在获取模型…</text>
+      </div>
+
+      <div class="state" if="{{ !loading && !models.length }}">
+        <text class="state-title">{{ errorText || "没有可用模型" }}</text>
+        <text class="state-sub">点右上角「刷新」重试</text>
+      </div>
+
+      <text class="foot" if="{{ models.length }}">列表由接口 /models 自动获取</text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+import router from "@system.router"
+import { getModel, getApiMode, getProviderInfo } from "../../../deepseek/client"
+import { getCachedModels, loadModels } from "../../../lib/modelCatalog"
+import { getProfile } from "../../../lib/deviceProfile"
+
+export default {
+  private: {
+    scrclass: "",
+    models: [],
+    current: "",
+    loading: false,
+    loaded: false,
+    errorText: "",
+    subText: "",
+    contentTop: 0
+  },
+
+  onInit() {
+    if (global.ui && global.ui.InitPage) global.ui.InitPage(this, "pages/settings/models")
+    const profile = global.UI_PROFILE || getProfile()
+    this.contentTop = profile.contentTop
+    this.current = getModel()
+  },
+
+  onShow() {
+    // 第一次进来拉一次；之后返回不再重复请求
+    if (this.loaded) {
+      this.updateSubText()
+      return
+    }
+    const cached = getCachedModels()
+    if (cached.length) this.applyList(cached)
+    this.updateSubText()
+    this.fetch(false)
+  },
+
+  /** 右上角「刷新」：跳过缓存强制重拉 */
+  refresh() {
+    this.fetch(true)
+  },
+
+  async fetch(force) {
+    if (this.loading) return
+    this.loading = true
+    this.errorText = ""
+    this.updateSubText()
+    try {
+      this.applyList(await loadModels(force))
+    } catch (err) {
+      this.errorText = (err && err.message) || "获取失败，请检查网络"
+      global.logger.error(`[models] ${JSON.stringify(err)}`)
+      // 拉不到列表也别让用户无模型可选：用内置兜底
+      if (!this.models.length) this.applyList(getProviderInfo().models)
+    } finally {
+      this.loading = false
+      this.loaded = true
+      this.updateSubText()
+    }
+  },
+
+  applyList(ids) {
+    const list = []
+    for (let i = 0; i < ids.length; i++) list.push({ id: ids[i] })
+    this.models = list
+  },
+
+  updateSubText() {
+    const name = getApiMode() === "deepseek" ? "DeepSeek" : "内置免费"
+    if (this.loading) {
+      this.subText = `${name} · 正在获取…`
+      return
+    }
+    if (this.errorText) {
+      this.subText = `${name} · 获取失败`
+      return
+    }
+    this.subText = `${name} · 共 ${this.models.length} 个`
+  },
+
+  pick(id) {
+    if (!id) return
+    if (id === this.current) {
+      router.back()
+      return
+    }
+    const deepseek = getApiMode() === "deepseek"
+    global.config.write(cfg => {
+      if (deepseek) cfg.deepseekModel = id
+      else cfg.builtinModel = id
+    })
+    this.current = id
+    prompt.showToast({ message: `已切换到 ${id}` })
+    setTimeout(() => router.back(), 260)
+  },
+
+  onBackPress() {
+    if (global.ui && global.ui.OnBackPressTriggered) {
+      global.ui.OnBackPressTriggered()
+      return true
+    }
+    return false
+  }
+}
+</script>
+
+<style lang="less">
+@import "src/less/global.less";
+
+.tip {
+  width: 92%;
+  margin-top: 6px;
+  margin-bottom: 14px;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+}
+
+.row {
+  width: 92%;
+  height: 84px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 26px;
+  border-radius: 28px;
+  background-color: #1e1e1e;
+  margin-bottom: 10px;
+}
+
+.row-on {
+  background-color: rgba(77, 163, 255, 0.18);
+}
+
+.name {
+  flex: 1;
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.9);
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.check {
+  flex-shrink: 0;
+  margin-left: 10px;
+  font-size: 26px;
+  color: #4da3ff;
+}
+
+.state {
+  width: 92%;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 100px;
+}
+
+.state-title {
+  font-size: 27px;
+  color: rgba(255, 255, 255, 0.78);
+  text-align: center;
+}
+
+.state-sub {
+  margin-top: 14px;
+  font-size: 21px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.foot {
+  width: 92%;
+  margin-top: 24px;
+  margin-bottom: 70px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: center;
+}
+
+@media screen and (shape: circle) {
+  .tip,
+  .row,
+  .state,
+  .foot {
+    width: 86%;
+  }
+}
+
+@media (max-width: 190) {
+  .tip {
+    font-size: 18px;
+  }
+  .row {
+    height: 74px;
+    padding: 0 20px;
+  }
+  .name {
+    font-size: 20px;
+  }
+  .check {
+    font-size: 22px;
+  }
+  .state-title {
+    font-size: 23px;
+  }
+  .foot {
+    font-size: 17px;
+  }
+}
+</style>

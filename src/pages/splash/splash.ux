@@ -1,0 +1,117 @@
+<template>
+  <div class="page">
+    <text class="logo">腕上AI</text>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+
+// 启动准备的判定标准：app.ux 把所有阶段（配置 / Key / 会话 / 设备信息）跑完
+// 才会置 global.bootDone。不能只看 global.config.read——那个在 onCreate 第一行
+// 就有了，会让我们在会话还没加载完时提前跳进首页，首页看不到历史。
+// 如果 onCreate 在中途卡住，bootDone 永远不出现，由下面的轮询上限兜底放行。
+function ready() {
+  try {
+    return !!global.bootDone
+  } catch (e) {
+    return false
+  }
+}
+
+export default {
+  private: {
+    jumped: false,
+    tries: 0,
+    timer: null,
+    backTimer: null
+  },
+
+  onInit() {
+    // 主路径：onCreate 正常完成时，这个 Promise 一兑现就立刻跳，不用等轮询
+    if (global.ready && typeof global.ready.then === "function") {
+      global.ready.then(() => this.jump()).catch(() => {})
+    }
+    this.waitAndJump()
+  },
+
+  /**
+   * 轮询兜底：每 150ms 看一次，最多 30 次（约 4.5 秒）。
+   * 启动流程现在分阶段（每段之间还有 24ms 让帧），正常几百毫秒就绪；
+   * 4.5 秒是「所有阶段都超时」的上限，到点照跳——配置层自身有默认值，
+   * 页面能跑起来，卡在 LOGO 上什么也做不了。
+   */
+  waitAndJump() {
+    if (this.jumped) return
+    if (ready() || this.tries >= 30) {
+      this.jump()
+      return
+    }
+    this.tries += 1
+    this.timer = setTimeout(() => {
+      this.timer = null
+      this.waitAndJump()
+    }, 150)
+  },
+
+  jump() {
+    if (this.jumped) return
+    this.jumped = true
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+    this.go(0)
+  },
+
+  /**
+   * 跳转失败时重试。router.replace 在页面栈还没稳定时会抛，
+   * 之前没有兜底，一抛就停在 LOGO 上不动。
+   */
+  go(attempt) {
+    try {
+      router.replace({ uri: "pages/index" })
+      return
+    } catch (e) {
+      if (attempt < 2) {
+        this.backTimer = setTimeout(() => {
+          this.backTimer = null
+          this.go(attempt + 1)
+        }, 250)
+        return
+      }
+      // 最后一搏：换成 push，至少让用户进得去
+      try {
+        router.push({ uri: "pages/index" })
+      } catch (e2) {
+        // 实在跳不了就停在这里，不再递归
+      }
+    }
+  },
+
+  onDestroy() {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+    if (this.backTimer) {
+      clearTimeout(this.backTimer)
+      this.backTimer = null
+    }
+  }
+}
+</script>
+
+<style lang="less">
+@import "src/less/global.less";
+
+.page {
+  justify-content: center;
+}
+
+.logo {
+  font-size: 40px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+</style>

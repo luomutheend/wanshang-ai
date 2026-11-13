@@ -1,0 +1,186 @@
+<script>
+import { Config } from "./config";
+import logger from "./logger/logger";
+import store from "./lib/store";
+import { getProfile } from "./lib/deviceProfile";
+import { sleep, withTimeout } from "./lib/async";
+import { warmup as warmupSessions, shutdown as shutdownSessions, isLoaded as isSessionsLoaded } from "./lib/sessions";
+import * as ui from "./ui/ui";
+import * as tools from "./tools";
+
+// 页面可能在 onCreate 完成前就渲染，入口页(splash)等待这个 Promise 再跳转
+let resolveReady;
+global.ready = new Promise(res => resolveReady = res);
+
+// 阶段之间固定让出的时长：不是死等，是把控制权交回渲染/GC 一帧，
+// 让上一阶段解析出来的对象先落定，别和下一阶段的分配叠在同一个循环里
+const STAGE_GAP = 24;
+
+/**
+ * 跑一个启动阶段。
+ * 单个阶段失败只记日志、不中断后续——卡在 LOGO 比缺一个字段严重得多。
+ */
+async function stage(label, fn, ms) {
+  try {
+    await withTimeout(Promise.resolve().then(fn), ms, `${label} timeout`);
+  } catch (e) {
+    logger.error(`boot ${label} failed: ${JSON.stringify(e)}`);
+  }
+  await sleep(STAGE_GAP);
+}
+
+export default {
+  async onCreate() {
+    global.logger = logger;
+
+    // 关键：先把配置对象挂上去，再等异步初始化。
+    // store 的构造函数里已经装好 DEFAULT_CONFIG，所以即使 init 还没回来、
+    // 甚至永远不回来，页面读到的也是可用的默认配置，而不是 undefined。
+    // 之前是 await 之后才赋值，一旦 storage 不回调，页面 onInit 里
+    // global.config.read 就会抛异常，界面停在启动 LOGO。
+    global.config = Config;
+
+    // 分阶段加载：配置 → Key → 会话 → 设备信息。
+    // 原来是一口气 await 完，解析出来的对象会同时挂在内存里；
+    // 现在每段之间让 24ms，峰值被摊平，启动时间只多几十毫秒。
+    await stage("config", () => Config.initConfig(), 2500);
+    await stage("key", () => Config.initKey(), 1200);
+    // 会话跟着配置一起加载（不延迟到打开历史页），但内部每 3 条让出一次
+    await stage("sessions", () => warmupSessions(), 2500);
+    await stage("device", async () => {
+      // 设备信息是一次很轻的系统调用，但页面布局要靠它算安全边距
+      try {
+        global.DEVICE_INFO = (await withTimeout(tools.getDeviceInformation(), 1000, "device info timeout")) || {};
+      } catch (e) {
+        logger.error(`getDeviceInformation failed: ${JSON.stringify(e)}`);
+        global.DEVICE_INFO = {};
+      }
+      global.DEVICE_INFO.screenShape = tools.normalizeScreenShape(global.DEVICE_INFO);
+
+      // 设备档案：页面/键盘按它取安全边距、预览高度与键盘形态
+      try {
+        global.UI_PROFILE = getProfile();
+        logger.log(`ui profile: ${global.UI_PROFILE.label}, ${global.UI_PROFILE.deviceText}`);
+      } catch (e) {
+        logger.error(`getProfile failed: ${JSON.stringify(e)}`);
+      }
+    }, 2500);
+
+    try {
+      ui.Init();
+      global.ui = ui;
+    } catch (e) {
+      logger.error(`ui init failed: ${JSON.stringify(e)}`);
+    }
+
+    // 无论上面哪一步失败，都要放行启动页：卡在 LOGO 比少个字段严重得多。
+    // bootDone 是给 splash 看的「真的准备完了」标记——global.config 在 onCreate
+    // 第一行就挂上了，不能拿它当就绪信号，否则会话还没加载完就跳进首页了。
+    global.bootDone = true;
+    resolveReady();
+
+    // 首屏出来后再补读一次存储。
+    //
+    // 退出后立刻重进时，storage 在头一两秒经常不回调，启动那一次读会失败。
+    // 失败本身不要紧（store 进只读模式、sessions 不置 loaded），但界面会显示成
+    // 默认配置 + 空历史。这里隔一会儿再读一次，把数据接回来；
+    // 仍然读不到就什么都不做，绝不用内存里的默认值覆盖磁盘。
+    //
+    // 注意要等 store.ready：storage 读超时会让 init 拖到好几秒，
+    // 这时补读会撞上「还没开始读」，白跑一趟。
+    let bootRetry = 0;
+    const retryBootRead = async () => {
+      if (!store.ready && bootRetry < 5) {
+        bootRetry += 1;
+        setTimeout(retryBootRead, 800);
+        return;
+      }
+      try {
+        if (store.loadFailed) {
+          const ok = await store.retryLoad();
+          logger.log(`[boot] storage retry ${ok ? "ok" : "failed"}`);
+        }
+      } catch (e) {
+        logger.error(`[boot] storage retry failed: ${JSON.stringify(e)}`);
+      }
+      try {
+        if (!isSessionsLoaded()) await warmupSessions();
+      } catch (e) {
+        logger.error(`[boot] sessions retry failed: ${JSON.stringify(e)}`);
+      }
+    };
+    setTimeout(retryBootRead, 1200);
+
+    // 存储自诊断不再在启动时自动跑：它要打 4~6 次 storage / file 接口，
+    // 而 Vela 上文件接口调用一多就容易把应用拖进重启。
+    // 现在改为在「关于」页连点版本号打开诊断时按需执行一次（见 about.ux）。
+  },
+
+  /**
+   * 全局错误兜底：未捕获异常只记录不中断，避免单点异常把应用拖进重启循环。
+   */
+  onError(err) {
+    try {
+      const message = err && (err.message || err.stack)
+        ? (err.message || err.stack)
+        : JSON.stringify(err);
+      if (global.logger) global.logger.error(`[global uncaught] ${message}`);
+    } catch (e) {
+      // 兜底逻辑自身出错时忽略
+    }
+  },
+
+  onShow() {
+    // 回到前台恢复页面池清理，但不重置 vmPool（否则当前页实例丢了，返回动画失效）
+    try {
+      if (global.ui && global.ui.Resume) global.ui.Resume();
+    } catch (e) {
+      // 忽略
+    }
+  },
+
+  onHide() {
+    // 退到后台时停掉 10 秒一次的 GC 定时器：后台期间调 router 接口没有任何意义，
+    // 而且在部分固件上退出过程中调 router 会触发异常
+    try {
+      if (global.ui && global.ui.Pause) global.ui.Pause();
+    } catch (e) {
+      // 忽略
+    }
+    // 后台很可能就是退出前兆：把会话写盘合并窗口里的改动立刻落一次，
+    // 不 await，写不完也不能拖住切后台
+    try {
+      shutdownSessions().catch(() => {});
+    } catch (e) {
+      // 忽略
+    }
+  },
+
+  async onDestroy() {
+    try {
+      ui.Stop();
+    } catch (e) {
+      // 忽略
+    }
+    try {
+      // 会话优先：它的写盘被合并到 1.8 秒窗口里，退出时必须补一刀。
+      // 同样限时，销毁阶段 storage 不回调是常态。
+      await withTimeout(shutdownSessions(), 500, "sessions flush timeout");
+    } catch (e) {
+      // 忽略
+    }
+    try {
+      // 退出时写盘必须限时：Vela 在销毁阶段 storage/file 常常不回调，
+      // 原来的 await 会一直挂着，应用处于「正在退出」的半死状态，
+      // 再次进入就可能卡在启动页。这里最多等 600ms，写不完就放弃。
+      // beginExit 之后只尝试一次 storage，不再走 mkdir + writeText 兜底。
+      store.beginExit();
+      await withTimeout(store.flush(), 600, "exit flush timeout");
+    } catch (e) {
+      // 忽略
+    }
+    // 退出时不主动刷日志文件：日志是 15 秒批量落的，为了最后几行去触发
+    // mkdir + list + writeText 三次文件调用不划算，销毁阶段更容易出问题。
+  }
+}
+</script>

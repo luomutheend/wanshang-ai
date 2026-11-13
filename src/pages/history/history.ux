@@ -1,0 +1,223 @@
+<import name="page-header" src="@components/PageHeader/PageHeader.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{ scrclass }}" scroll-y="true" bounces="true">
+      <page-header title="历史会话"></page-header>
+      <div style="height: {{ contentTop }}px; width: 100%;"></div>
+
+      <text class="tip" if="{{ sessions.length }}">点选会话可继续之前的对话</text>
+
+      <div class="row" for="{{ sessions }}" @click="open($item)">
+        <div class="main">
+          <text class="title">{{ $item.title }}</text>
+          <text class="meta">{{ $item.timeText }} · {{ $item.count }} 条消息</text>
+        </div>
+        <text class="arrow">›</text>
+      </div>
+
+      <div class="empty" if="{{ !sessions.length }}">
+        <text class="empty-title">还没有历史会话</text>
+        <text class="empty-sub">回首页提问后会自动保存在这里</text>
+      </div>
+
+      <text class="clear {{ confirmClear ? 'clear-danger' : '' }}" if="{{ sessions.length }}" @click="clearAll">{{ confirmClear ? "再点一次确认清空" : "清空全部历史" }}</text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+import router from "@system.router"
+import { listForDisplay, openSession, clearAllSessions } from "../../lib/sessions"
+import { getProfile } from "../../lib/deviceProfile"
+
+export default {
+  private: {
+    scrclass: "",
+    sessions: [],
+    confirmClear: false,
+    contentTop: 0
+  },
+
+  onInit() {
+    if (global.ui && global.ui.InitPage) global.ui.InitPage(this, "pages/history")
+    const profile = global.UI_PROFILE || getProfile()
+    this.contentTop = profile.contentTop
+  },
+
+  onShow() {
+    this.refresh()
+    this.confirmClear = false
+  },
+
+  refresh() {
+    this.sessions = listForDisplay()
+  },
+
+  async open(item) {
+    // 冷会话（空闲回落过的）要先从磁盘读回完整正文，所以这里是异步的
+    const session = await openSession(item.id)
+    if (!session) {
+      prompt.showToast({ message: "会话不存在" })
+      this.refresh()
+      return
+    }
+    global.__openSession = true
+    prompt.showToast({ message: "已切换到该会话" })
+    router.back()
+  },
+
+  // 一次点击只进入确认态，3 秒内再点一次才真正清空
+  clearAll() {
+    if (!this.confirmClear) {
+      this.confirmClear = true
+      prompt.showToast({ message: "再点一次确认清空全部会话" })
+      setTimeout(() => {
+        this.confirmClear = false
+      }, 3000)
+      return
+    }
+    clearAllSessions()
+    this.confirmClear = false
+    this.refresh()
+    prompt.showToast({ message: "历史已清空" })
+  },
+
+  onBackPress() {
+    if (global.ui && global.ui.OnBackPressTriggered) {
+      global.ui.OnBackPressTriggered()
+      return true
+    }
+    return false
+  }
+}
+</script>
+
+<style lang="less">
+@import "src/less/global.less";
+
+.tip {
+  width: 92%;
+  margin-top: 6px;
+  margin-bottom: 14px;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+}
+
+.row {
+  width: 92%;
+  height: 104px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  border-radius: 34px;
+  background-color: #1e1e1e;
+  margin-bottom: 12px;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.title {
+  width: 100%;
+  font-size: 28px;
+  color: rgba(255, 255, 255, 0.92);
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  margin-top: 8px;
+  font-size: 21px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.arrow {
+  flex-shrink: 0;
+  margin-left: 12px;
+  font-size: 34px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.empty {
+  width: 92%;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 120px;
+}
+
+.empty-title {
+  font-size: 30px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.empty-sub {
+  margin-top: 16px;
+  font-size: 23px;
+  color: rgba(255, 255, 255, 0.42);
+  text-align: center;
+  line-height: 32px;
+}
+
+.clear {
+  width: 250px;
+  height: 66px;
+  line-height: 66px;
+  text-align: center;
+  margin-top: 26px;
+  margin-bottom: 60px;
+  border-radius: 33px;
+  background-color: rgba(255, 77, 79, 0.16);
+  font-size: 24px;
+  color: #ff7875;
+}
+
+.clear-danger {
+  background-color: rgba(255, 77, 79, 0.38);
+  color: #ffffff;
+}
+
+@media screen and (shape: circle) {
+  .tip {
+    width: 86%;
+  }
+  .row {
+    width: 86%;
+  }
+  .empty {
+    width: 86%;
+  }
+}
+
+/* 手环窄屏：标题与说明文字缩小 */
+@media (max-width: 190) {
+  .tip {
+    font-size: 18px;
+  }
+  .title {
+    font-size: 23px;
+  }
+  .meta {
+    font-size: 18px;
+  }
+  .empty-title {
+    font-size: 26px;
+  }
+  .empty-sub {
+    font-size: 19px;
+    line-height: 28px;
+  }
+  .clear {
+    width: 210px;
+    height: 60px;
+    line-height: 60px;
+    font-size: 21px;
+  }
+}
+</style>

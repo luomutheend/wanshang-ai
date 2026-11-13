@@ -1,0 +1,161 @@
+<template>
+  <div class="ph {{ round ? 'ph-round' : '' }}" style="height: {{ headerH }}px; padding-top: {{ headerTop }}px;" ontouchstart="onTouchStart" ontouchend="onTouchEnd">
+    <text class="ph-back {{ round ? 'ph-back-round' : '' }}" if="{{ back }}" @click="goBack">‹</text>
+    <text class="ph-title {{ round ? 'ph-title-round' : '' }}">{{ title }}</text>
+    <text class="ph-right {{ round ? 'ph-right-round' : '' }}" if="{{ rightText }}" @click="onRightTap">{{ rightText }}</text>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import { getProfile } from "../../lib/deviceProfile"
+
+// 顶部向右滑返回：起手必须在标题栏区域，横向位移 ≥ 50px 且明显大于纵向
+const SWIPE_MIN = 50
+
+export default {
+  props: {
+    title: { default: "" },
+    back: { default: true },
+    rightText: { default: "" }
+  },
+  private: {
+    round: false,
+    headerH: 88,
+    headerTop: 0
+  },
+  onInit() {
+    // 页面 VM 由各页面自己的 onInit 显式注册（InitPage(this, "pages/xxx")）。
+    // 组件里曾经用 router.getState().name 推断页面名，onInit 阶段这个值在部分固件
+    // 上还是上一页，会把当前 VM 注册到错误的 key 下，反而让返回动画错乱。
+    const profile = getProfile()
+    this.round = profile.key === "round"
+    this.headerH = profile.headerH
+    this.headerTop = profile.headerTop
+  },
+  onTouchStart({ changedTouches }) {
+    const t = changedTouches && changedTouches[0]
+    if (!t) return
+    this._startX = t.clientX
+    this._startY = t.clientY
+  },
+  onTouchEnd({ changedTouches }) {
+    const startX = this._startX
+    const startY = this._startY
+    this._startX = undefined
+    this._startY = undefined
+    if (startX === undefined) return
+    const t = changedTouches && changedTouches[0]
+    if (!t) return
+    const dx = t.clientX - startX
+    const dy = t.clientY - startY
+    // 标题栏高度约 90px，起手在其中才视为「顶部起手」
+    if (startY <= this.headerH + 40 && dx >= SWIPE_MIN && dx > Math.abs(dy)) {
+      this.goBack()
+    }
+  },
+  goBack() {
+    if (!this.back) return
+    // 走 ui 的返回路径，带退场动画；ui 不可用时退回直接返回
+    if (global.ui && global.ui.OnBackPressTriggered) {
+      global.ui.OnBackPressTriggered()
+    } else {
+      router.back()
+    }
+  },
+  onRightTap() {
+    this.$emit("righttap", {})
+  }
+}
+</script>
+
+<style>
+.ph {
+  width: 100%;
+  height: 88px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 22px;
+  padding-right: 22px;
+}
+
+/* 圆屏：标题组整体居中，避开左右两条会被表盘切掉的边 */
+.ph-round {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.ph-back {
+  width: 62px;
+  height: 76px;
+  line-height: 76px;
+  font-size: 46px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ph-title {
+  flex: 1;
+  text-align: center;
+  font-size: 32px;
+  font-weight: 600;
+  color: #ffffff;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.ph-right {
+  width: 96px;
+  height: 56px;
+  line-height: 56px;
+  text-align: center;
+  border-radius: 28px;
+  background-color: rgba(255, 255, 255, 0.14);
+  font-size: 24px;
+  color: #ffffff;
+}
+
+.ph-back-round {
+  width: 48px;
+  flex-shrink: 0;
+}
+
+.ph-title-round {
+  flex: 0;
+  max-width: 164px;
+  font-size: 28px;
+}
+
+.ph-right-round {
+  width: 78px;
+  height: 52px;
+  line-height: 52px;
+  border-radius: 26px;
+  font-size: 22px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* 手环等窄屏（按 dp 查询）：标题栏同步缩小，避免标题+按钮溢出 */
+@media (max-width: 190) {
+  .ph {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .ph-back {
+    width: 50px;
+    font-size: 38px;
+  }
+  .ph-title {
+    font-size: 26px;
+  }
+  .ph-right {
+    width: 82px;
+    height: 50px;
+    line-height: 50px;
+    border-radius: 25px;
+    font-size: 21px;
+  }
+}
+</style>

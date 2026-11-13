@@ -1,0 +1,294 @@
+<import name="page-header" src="@components/PageHeader/PageHeader.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{ scrclass }}" scroll-y="true" bounces="true">
+      <page-header title="余额" right-text="刷新" @righttap="load"></page-header>
+      <div style="height: {{ contentTop }}px; width: 100%;"></div>
+
+      <div class="state" if="{{ loading }}">
+        <text class="state-text">正在查询余额…</text>
+      </div>
+
+      <div class="error" if="{{ !loading && errorText }}">
+        <text class="error-text">{{ errorText }}</text>
+        <text class="retry" @click="load">重新查询</text>
+      </div>
+
+      <div class="summary" if="{{ !loading && !errorText }}">
+        <text class="summary-label">账户状态</text>
+        <text class="summary-value {{ available ? 'ok' : 'bad' }}">{{ available ? "可正常调用" : "余额不可用" }}</text>
+      </div>
+
+      <div class="card" for="{{ infos }}">
+        <div class="card-top">
+          <text class="currency">{{ $item.currency }}</text>
+          <text class="total">{{ $item.symbol }}{{ $item.total_balance }}</text>
+        </div>
+        <div class="line">
+          <text class="line-label">赠金余额</text>
+          <text class="line-value">{{ $item.granted_balance }}</text>
+        </div>
+        <div class="line">
+          <text class="line-label">充值余额</text>
+          <text class="line-value">{{ $item.topped_up_balance }}</text>
+        </div>
+      </div>
+
+      <text class="foot" if="{{ updatedAt }}">更新于 {{ updatedAt }}</text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import { getBalance } from "../../deepseek/client"
+import { getProfile } from "../../lib/deviceProfile"
+
+function currentTime() {
+  const now = new Date()
+  const h = now.getHours() < 10 ? "0" + now.getHours() : String(now.getHours())
+  const m = now.getMinutes() < 10 ? "0" + now.getMinutes() : String(now.getMinutes())
+  return `${h}:${m}`
+}
+
+function symbolOf(currency) {
+  if (currency === "CNY") return "¥"
+  if (currency === "USD") return "$"
+  return ""
+}
+
+export default {
+  private: {
+    scrclass: "",
+    loading: false,
+    errorText: "",
+    available: false,
+    infos: [],
+    updatedAt: "",
+    contentTop: 0
+  },
+
+  onInit() {
+    if (global.ui && global.ui.InitPage) global.ui.InitPage(this, "pages/balance")
+    const profile = global.UI_PROFILE || getProfile()
+    this.contentTop = profile.contentTop
+  },
+
+  onReady() {
+    this.load()
+  },
+
+  onBackPress() {
+    if (global.ui && global.ui.OnBackPressTriggered) {
+      global.ui.OnBackPressTriggered()
+      return true
+    }
+    return false
+  },
+
+  async load() {
+    if (this.loading) return
+    this.loading = true
+    this.errorText = ""
+
+    try {
+      const data = await getBalance()
+      this.available = !!(data && data.is_available)
+      const list = data && Array.isArray(data.balance_infos) ? data.balance_infos : []
+      this.infos = list.map(item => ({
+        currency: item.currency || "",
+        symbol: symbolOf(item.currency),
+        total_balance: item.total_balance || "0",
+        granted_balance: item.granted_balance || "0",
+        topped_up_balance: item.topped_up_balance || "0"
+      }))
+      this.updatedAt = currentTime()
+    } catch (err) {
+      this.errorText = (err && err.message) || "查询失败，请稍后重试"
+      global.logger.error(`[balance] ${JSON.stringify(err)}`)
+    } finally {
+      this.loading = false
+    }
+  }
+}
+</script>
+
+<style lang="less">
+@import "src/less/global.less";
+
+.state {
+  width: 92%;
+  height: 160px;
+  justify-content: center;
+  align-items: center;
+}
+
+.state-text {
+  font-size: 26px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.error {
+  width: 92%;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 22px;
+  border-radius: 24px;
+  background-color: rgba(255, 77, 79, 0.18);
+  margin-top: 10px;
+}
+
+.error-text {
+  font-size: 25px;
+  line-height: 34px;
+  color: #ff7875;
+  text-align: center;
+}
+
+.retry {
+  margin-top: 18px;
+  width: 180px;
+  height: 62px;
+  line-height: 62px;
+  text-align: center;
+  border-radius: 31px;
+  background-color: rgba(255, 255, 255, 0.16);
+  font-size: 25px;
+  color: #ffffff;
+}
+
+.summary {
+  width: 92%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px;
+  border-radius: 24px;
+  background-color: #1e1e1e;
+  margin-top: 10px;
+  margin-bottom: 14px;
+}
+
+.summary-label {
+  font-size: 26px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.summary-value {
+  font-size: 25px;
+}
+
+.ok {
+  color: #4cd964;
+}
+
+.bad {
+  color: #ff7875;
+}
+
+.card {
+  width: 92%;
+  flex-direction: column;
+  padding: 22px;
+  border-radius: 26px;
+  background-color: #1e1e1e;
+  margin-bottom: 14px;
+}
+
+.card-top {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.currency {
+  font-size: 26px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.total {
+  font-size: 44px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.line {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.line-label {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.line-value {
+  font-size: 26px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.foot {
+  margin-top: 6px;
+  margin-bottom: 60px;
+  font-size: 21px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+@media screen and (shape: circle) {
+  .state {
+    width: 86%;
+  }
+  .error {
+    width: 86%;
+  }
+  .summary {
+    width: 86%;
+  }
+  .card {
+    width: 86%;
+  }
+}
+
+/* 手环窄屏：文字缩小，避免行内文字重叠 */
+@media (max-width: 190) {
+  .state-text {
+    font-size: 21px;
+  }
+  .error-text {
+    font-size: 21px;
+    line-height: 30px;
+  }
+  .retry {
+    width: 150px;
+    height: 56px;
+    line-height: 56px;
+    font-size: 21px;
+  }
+  .summary-label {
+    font-size: 21px;
+  }
+  .summary-value {
+    font-size: 20px;
+  }
+  .currency {
+    font-size: 21px;
+  }
+  .total {
+    font-size: 34px;
+  }
+  .line-label {
+    font-size: 19px;
+  }
+  .line-value {
+    font-size: 20px;
+  }
+  .foot {
+    font-size: 17px;
+  }
+}
+</style>

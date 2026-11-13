@@ -1,0 +1,307 @@
+<import name="page-header" src="@components/PageHeader/PageHeader.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{ scrclass }}" scroll-y="true" bounces="true">
+      <page-header title="关于"></page-header>
+      <div style="height: {{ contentTop }}px; width: 100%;"></div>
+
+      <image class="logo" src="/common/Images/logo/logo.png"></image>
+      <text class="app-name">腕上AI</text>
+      <text class="app-ver" @click="onVersionTap">1.1.0 · Vela 快应用</text>
+
+      <text class="intro">多轮对话 / 联网搜索 / 余额 / 历史 / 用量统计，适配圆屏、方屏与手环</text>
+
+      <div class="card">
+        <text class="card-title">信息</text>
+        <div class="line">
+          <text class="line-label">开发者</text>
+          <text class="line-value strong">落幕.</text>
+        </div>
+        <div class="line mail-line">
+          <text class="line-label">联系邮箱</text>
+          <text class="line-value mail">1657579274@qq.com</text>
+        </div>
+        <div class="line">
+          <text class="line-label">设备</text>
+          <text class="line-value">{{ deviceLabel }}</text>
+        </div>
+        <div class="line">
+          <text class="line-label">许可</text>
+          <text class="line-value">AGPL-3.0-only</text>
+        </div>
+      </div>
+
+      <div class="card">
+        <text class="card-title">参与测试</text>
+        <text class="person">@小周10P · @phezznAn--S5eSIM</text>
+      </div>
+
+      <div class="card">
+        <text class="card-title">开源项目</text>
+        <text class="pkg-line">NEORUAA 输入法组件 · MIT</text>
+        <text class="pkg-line">aiot-toolkit 2.0.5 · ISC</text>
+        <text class="pkg-line">@aiot-toolkit/jsc 1.0.10 · ISC</text>
+        <text class="pkg-line">rspack 1.7.12 · MIT</text>
+        <text class="pkg-line">TypeScript 5.9.3 · Apache-2.0</text>
+      </div>
+
+      <div class="card" if="{{ showDiag }}">
+        <text class="card-title">存储诊断</text>
+        <div class="line">
+          <text class="line-label">启动次数</text>
+          <text class="line-value">第 {{ launchCount }} 次</text>
+        </div>
+        <div class="line">
+          <text class="line-label">系统存储</text>
+          <text class="line-value">{{ storageState }}</text>
+        </div>
+        <div class="line">
+          <text class="line-label">文件存储</text>
+          <text class="line-value">{{ fileState }}</text>
+        </div>
+        <div class="line">
+          <text class="line-label">上次计数</text>
+          <text class="line-value">系统 {{ prevStorage }} · 文件 {{ prevFile }}</text>
+        </div>
+      </div>
+
+      <text class="foot">API Key 仅保存在本机</text>
+    </scroll>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+import { runStorageDiagnostics } from "../../lib/diag"
+import { getProfile } from "../../lib/deviceProfile"
+
+export default {
+  private: {
+    scrclass: "",
+    contentTop: 0,
+    deviceLabel: "",
+    launchCount: 0,
+    prevStorage: 0,
+    prevFile: 0,
+    storageState: "失败",
+    fileState: "失败",
+    // 存储诊断默认隐藏，连点版本号 5 次才显示
+    showDiag: false,
+    tapCount: 0,
+    tapTimer: null
+  },
+
+  // 连点版本号 5 次开关存储诊断，避免把调试信息暴露给普通用户。
+  // 诊断要打几次存储/文件接口，所以只在打开时跑一次，不在启动时自动跑。
+  onVersionTap() {
+    this.tapCount += 1
+    if (this.tapCount >= 5) {
+      this.tapCount = 0
+      this.showDiag = !this.showDiag
+      prompt.showToast({ message: this.showDiag ? "已显示存储诊断" : "已隐藏存储诊断" })
+      if (this.showDiag) this.runDiag()
+      return
+    }
+    if (this.tapTimer) clearTimeout(this.tapTimer)
+    this.tapTimer = setTimeout(() => {
+      this.tapCount = 0
+    }, 2000)
+  },
+
+  async runDiag() {
+    try {
+      const diag = await runStorageDiagnostics()
+      global.DIAG = diag
+      this.launchCount = diag.count || 0
+      this.prevStorage = diag.prevStorage || 0
+      this.prevFile = diag.prevFile || 0
+      this.storageState = diag.storageOk ? "正常" : "失败"
+      this.fileState = diag.fileOk ? "正常" : "失败"
+    } catch (e) {
+      this.storageState = "失败"
+      this.fileState = "失败"
+    }
+  },
+
+  onInit() {
+    if (global.ui && global.ui.InitPage) global.ui.InitPage(this, "pages/about")
+    const profile = global.UI_PROFILE || getProfile()
+    this.contentTop = profile.contentTop
+    this.deviceLabel = `${profile.shortLabel} ${profile.screenW}×${profile.screenH}`
+    const diag = global.DIAG || {}
+    this.launchCount = diag.count || 0
+    this.prevStorage = diag.prevStorage || 0
+    this.prevFile = diag.prevFile || 0
+    this.storageState = diag.storageOk ? "正常" : "失败"
+    this.fileState = diag.fileOk ? "正常" : "失败"
+  },
+
+  onBackPress() {
+    if (global.ui && global.ui.OnBackPressTriggered) {
+      global.ui.OnBackPressTriggered()
+      return true
+    }
+    return false
+  }
+}
+</script>
+
+<style lang="less">
+@import "src/less/global.less";
+
+.logo {
+  width: 92px;
+  height: 92px;
+  margin-top: 4px;
+}
+
+.app-name {
+  margin-top: 10px;
+  font-size: 32px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.app-ver {
+  margin-top: 6px;
+  font-size: 21px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+/* 简介不再包一层卡片：省一次圆角容器的内边距，视觉上也更轻 */
+.intro {
+  width: 88%;
+  margin-top: 14px;
+  font-size: 22px;
+  line-height: 31px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.card {
+  width: 92%;
+  flex-direction: column;
+  padding: 18px 24px;
+  border-radius: 28px;
+  background-color: #1e1e1e;
+  margin-bottom: 10px;
+}
+
+.line {
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 9px;
+}
+
+.line-label {
+  font-size: 23px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.line-value {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.strong {
+  color: #4da3ff;
+  font-weight: 600;
+}
+
+.card-title {
+  font-size: 25px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* 邮箱在宽屏与其它行同排，放不下时由窄屏媒体查询改成竖排 */
+.mail {
+  font-size: 21px;
+  color: #4da3ff;
+}
+
+/* 测试人员改成一行，不再占一张满宽卡片的高度 */
+.person {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 16px;
+  border-radius: 18px;
+  font-size: 21px;
+  color: #9ec5ff;
+  background-color: rgba(77, 163, 255, 0.13);
+}
+
+/* 开源项目：一条一行「名称 · 许可证」，比原来的两行式省一半高度 */
+.pkg-line {
+  width: 100%;
+  margin-top: 8px;
+  font-size: 22px;
+  line-height: 30px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.foot {
+  width: 88%;
+  margin-top: 8px;
+  margin-bottom: 40px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: center;
+}
+
+@media screen and (shape: circle) {
+  .card {
+    width: 86%;
+  }
+  .foot {
+    width: 78%;
+  }
+}
+
+/* 手环 9 Pro / 10 Pro 等窄屏：文字按屏宽缩小，避免行内文字重叠 */
+@media (max-width: 190) {
+  .app-name {
+    font-size: 28px;
+  }
+  .app-ver {
+    font-size: 18px;
+  }
+  .intro {
+    font-size: 18px;
+    line-height: 26px;
+  }
+  /* 窄屏一行放不下「标签 + 值」，改成上下两行，避免文字被挤成竖排单字 */
+  .line {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .line-label {
+    font-size: 18px;
+  }
+  .line-value {
+    width: 100%;
+    margin-top: 2px;
+    font-size: 19px;
+  }
+  .card-title {
+    font-size: 21px;
+  }
+  /* 邮箱是 17 个字符的长串，窄屏再降一档才能落在卡片内 */
+  .mail {
+    font-size: 15px;
+  }
+  .person {
+    font-size: 17px;
+    padding: 8px 12px;
+  }
+  .pkg-line {
+    font-size: 18px;
+    line-height: 26px;
+  }
+  .foot {
+    font-size: 17px;
+  }
+}
+</style>

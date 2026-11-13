@@ -1,0 +1,76 @@
+@import './glanims.less';
+
+@screenWidth: 100%;
+@screenHeight: 100%;
+
+.page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: black;
+    width: @screenWidth;
+    height: @screenHeight;
+}
+
+.scroll {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: @screenWidth;
+    height: @screenHeight;
+
+    animation-name: openpage-scroll;
+    animation-timing-function: ease;
+    animation-duration: 500ms;
+    animation-direction: reverse;
+}
+
+.list {
+    padding-left: 33px;
+    padding-right: 33px;
+    padding-bottom: 100px;
+    flex: 1;
+    flex-direction: column;
+}
+
+.scroll-backanim {
+    animation-name: backpage-scroll;
+    animation-timing-function: ease;
+    animation-duration: 500ms;
+    animation-direction: normal;
+}
+
+.scroll-backanim-finished {
+    /* 必须显式禁掉动画：class 一旦落回不带 animation 的状态，
+       .scroll 里的 openpage-scroll 就会重新触发，看起来像「又播了一遍」 */
+    animation-name: none;
+    opacity: 0.0;
+    width: 0px;
+    height: 0px;
+    max-width: 0px;
+    max-height: 0px;
+    position: absolute;
+    top: 999px;
+    left: 999px;
+}
+
+/* 动画播完后的终态。不要用 "" 收尾：清空 class 会让 .scroll 的
+   openpage-scroll 重新开始，返回时就会出现第二遍动画。 */
+.scroll-anim-done {
+    animation-name: none;
+}
+
+.scroll-frombackanim {
+    animation-name: fromback-scroll;
+    animation-timing-function: ease;
+    animation-duration: 500ms;
+    animation-direction: reverse;
+}
+
+text {
+    color: white;
+}
+
+.noAnim {
+    animation-duration: 0ms;
+}

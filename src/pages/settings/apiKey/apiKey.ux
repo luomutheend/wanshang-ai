@@ -1,0 +1,376 @@
+<import name="page-header" src="@components/PageHeader/PageHeader.ux"></import>
+<import name="input-method" src="@components/InputMethod/InputMethod.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{ scrclass }}" scroll-y="true" bounces="true">
+      <page-header title="API Key"></page-header>
+
+      <text class="tip" style="margin-top: {{ contentTop }}px;">在 DeepSeek 开放平台创建，sk- 开头</text>
+
+      <div class="key-box" @click="showInput">
+        <text class="key-label">DeepSeek Key</text>
+        <text class="key-value">{{ maskedKey || "点击输入" }}</text>
+      </div>
+
+      <div class="buttons">
+        <text class="btn" @click="showInput">输入 Key</text>
+        <text class="btn" @click="clearKey">清空 Key</text>
+      </div>
+
+      <text class="hint">点「完成」收起键盘并自动保存</text>
+    </scroll>
+
+    <div class="ime" show="{{ !hideInput }}">
+      <div class="ime-panel" style="height: {{ panelHeight }}px;">
+        <scroll id="imePreview" class="ime-preview-box" scroll-y="true" bounces="true">
+          <div class="ime-preview-inner" style="padding-top: {{ previewTop }}px; padding-left: {{ previewX }}px; padding-right: {{ previewX }}px; padding-bottom: 104px;">
+            <text class="ime-preview">{{ text }}</text>
+          </div>
+        </scroll>
+        <div class="ime-actions">
+          <text class="ime-fold" @click="hideKeyboard">完成</text>
+          <text class="ime-save" @click="saveKey">保存</text>
+        </div>
+      </div>
+      <input-method
+        hide="{{ hideInput }}"
+        keyboardtype="QWERTY"
+        screentype="{{ screenShape }}"
+        bottomsafe="{{ kbBottom }}"
+        vibratemode="short"
+        @complete="onKeyInput"
+        @delete="onKeyDelete"
+      ></input-method>
+    </div>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+import router from "@system.router"
+import { saveApiKey, maskApiKey, getApiKey } from "../../../lib/apiKeyStore"
+import { getProfile } from "../../../lib/deviceProfile"
+
+export default {
+  private: {
+    scrclass: "",
+    panelHeight: 145,
+    contentTop: 0,
+    previewTop: 8,
+    previewX: 18,
+    kbBottom: 0,
+    screenShape: "circle",
+    hideInput: true,
+    text: "",
+    keyValue: "",
+    storedKey: "",
+    maskedKey: ""
+  },
+
+  onInit() {
+    if (global.ui && global.ui.InitPage) global.ui.InitPage(this, "pages/settings/apiKey")
+    const profile = global.UI_PROFILE || getProfile()
+    this.panelHeight = profile.panelHeight
+    this.contentTop = profile.contentTop
+    this.previewTop = profile.previewTop
+    this.previewX = profile.previewX
+    this.kbBottom = profile.kbBottom
+    this.screenShape = profile.kbShape
+    this.refresh()
+  },
+
+  onShow() {
+    this.refresh()
+  },
+
+  refresh() {
+    this.keyValue = getApiKey()
+    this.storedKey = this.keyValue
+    this.maskedKey = maskApiKey(this.keyValue)
+    if (this.hideInput) this.text = ""
+  },
+
+  showInput() {
+    this.text = this.keyValue
+    this.hideInput = false
+    this.scrollPreviewToEnd()
+  },
+
+  // 收起键盘时自动保存，避免"填完直接退出"导致丢失
+  async hideKeyboard() {
+    this.hideInput = true
+    const saved = await this.commit()
+    if (saved) prompt.showToast({ message: "已自动保存" })
+  },
+
+  onKeyInput(evt) {
+    const content = evt && evt.detail ? evt.detail.content : ""
+    if (!content) return
+    this.text += content
+    this.applyText()
+    this.scrollPreviewToEnd()
+  },
+
+  onKeyDelete() {
+    this.text = this.text.slice(0, -1)
+    this.applyText()
+    this.scrollPreviewToEnd()
+  },
+
+  applyText() {
+    this.keyValue = this.text
+    this.maskedKey = maskApiKey(this.text)
+  },
+
+  // 预览区滚到底，长 Key 输入时始终能看到最新字符
+  scrollPreviewToEnd() {
+    setTimeout(() => {
+      try {
+        const el = this.$element("imePreview")
+        if (el && el.scrollTo) el.scrollTo({ top: 99999 })
+      } catch (e) {
+        // 键盘尚未建出来时忽略
+      }
+    }, 30)
+  },
+
+  clearKey() {
+    this.keyValue = ""
+    this.maskedKey = ""
+    prompt.showToast({ message: "已清空，点「保存」后生效" })
+  },
+
+  /** 有改动就落盘；返回是否写成功 */
+  async commit() {
+    const key = String(this.keyValue || "").trim()
+    if (key === this.storedKey) return false
+    const ok = await saveApiKey(key)
+    if (!ok) {
+      prompt.showToast({ message: "保存失败，请重试" })
+      return false
+    }
+    this.storedKey = key
+    return true
+  },
+
+  async saveKey() {
+    if (!String(this.keyValue || "").trim() && !this.storedKey) {
+      prompt.showToast({ message: "请输入 API Key" })
+      return
+    }
+    const ok = await this.commit()
+    this.hideInput = true
+    if (!ok) {
+      // 没有改动也算正常退出
+      if (String(this.keyValue || "").trim() === this.storedKey) router.back()
+      return
+    }
+    prompt.showToast({ message: this.keyValue ? "已保存" : "已清除 API Key" })
+    router.back()
+  },
+
+  onBackPress() {
+    if (!this.hideInput) {
+      this.hideInput = true
+      this.commit()
+      return true
+    }
+    if (global.ui && global.ui.OnBackPressTriggered) {
+      global.ui.OnBackPressTriggered()
+      return true
+    }
+    return false
+  }
+}
+</script>
+
+<style lang="less">
+@import "src/less/global.less";
+
+.tip {
+  width: 84%;
+  margin-top: 6px;
+  font-size: 22px;
+  line-height: 32px;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+}
+
+.key-box {
+  width: 92%;
+  min-height: 120px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 20px 22px;
+  border-radius: 26px;
+  background-color: #1e1e1e;
+  margin-top: 22px;
+}
+
+.key-label {
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.key-value {
+  margin-top: 10px;
+  width: 100%;
+  font-size: 28px;
+  line-height: 38px;
+  color: rgba(255, 255, 255, 0.92);
+  lines: 2;
+  text-overflow: ellipsis;
+}
+
+.buttons {
+  width: 92%;
+  flex-direction: row;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.btn {
+  // 小屏两个按钮按屏宽均分，避免总宽超过屏幕
+  flex: 1;
+  min-width: 0;
+  max-width: 150px;
+  height: 66px;
+  line-height: 66px;
+  text-align: center;
+  border-radius: 33px;
+  background-color: rgba(255, 255, 255, 0.14);
+  font-size: 26px;
+  color: #ffffff;
+  margin-left: 8px;
+  margin-right: 8px;
+}
+
+.hint {
+  width: 82%;
+  margin-top: 26px;
+  font-size: 21px;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: center;
+}
+
+@media screen and (shape: circle) {
+  .tip {
+    width: 78%;
+  }
+  .key-box {
+    width: 86%;
+  }
+  .buttons {
+    width: 86%;
+  }
+  .hint {
+    width: 74%;
+  }
+}
+
+/* 手环窄屏：说明与输入预览文字缩小 */
+@media (max-width: 190) {
+  .tip {
+    font-size: 19px;
+    line-height: 28px;
+  }
+  .key-label {
+    font-size: 18px;
+  }
+  .key-value {
+    font-size: 23px;
+    line-height: 32px;
+  }
+  .btn {
+    font-size: 22px;
+  }
+  .hint {
+    font-size: 18px;
+    line-height: 26px;
+  }
+  .ime-preview {
+    font-size: 25px;
+    line-height: 32px;
+  }
+  .ime-fold {
+    font-size: 23px;
+  }
+  .ime-save {
+    font-size: 24px;
+  }
+}
+
+.ime {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: black;
+}
+
+// 键盘上方整块都是预览区，长 Key 可上下滑动查看
+.ime-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background-color: black;
+}
+
+.ime-preview-box {
+  width: 100%;
+  height: 100%;
+}
+
+.ime-preview-inner {
+  width: 100%;
+  flex-direction: column;
+  padding: 8px 18px 104px;
+}
+
+.ime-preview {
+  width: 100%;
+  font-size: 30px;
+  line-height: 38px;
+  color: #ffffff;
+}
+
+// 按钮固定在预览区底部、键盘正上方，尺寸放大
+.ime-actions {
+  position: absolute;
+  left: 0;
+  bottom: 8px;
+  width: 100%;
+  height: 72px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.62);
+}
+
+.ime-fold {
+  width: 132px;
+  height: 64px;
+  border-radius: 32px;
+  background-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-size: 27px;
+  text-align: center;
+  line-height: 64px;
+  margin-right: 8px;
+}
+
+.ime-save {
+  width: 152px;
+  height: 64px;
+  border-radius: 32px;
+  background-color: #0d6eff;
+  color: #ffffff;
+  font-size: 28px;
+  text-align: center;
+  line-height: 64px;
+  margin-left: 8px;
+}
+</style>

@@ -1,0 +1,74 @@
+{
+  "package": "org.coratech.deepseek.vela",
+  "name": "腕上AI",
+  "versionName": "1.1.0",
+  "versionCode": 2,
+  "minPlatformVersion": 1000,
+  "icon": "/common/Images/logo/logo.png",
+  "designWidth": 466,
+  "deviceTypeList": [
+    "watch"
+  ],
+  "features": [
+    {
+      "name": "system.fetch"
+    },
+    {
+      "name": "system.storage"
+    },
+    {
+      "name": "system.file"
+    },
+    {
+      "name": "system.device"
+    },
+    {
+      "name": "system.prompt"
+    },
+    {
+      "name": "system.router"
+    },
+    {
+      "name": "system.app"
+    },
+    {
+      "name": "system.vibrator"
+    }
+  ],
+  "config": {
+    "logLevel": "log",
+    "designWidth": "466"
+  },
+  "router": {
+    "entry": "pages/splash",
+    "pages": {
+      "pages/splash": {
+        "component": "splash"
+      },
+      "pages/index": {
+        "component": "index"
+      },
+      "pages/settings": {
+        "component": "settings"
+      },
+      "pages/settings/apiKey": {
+        "component": "apiKey"
+      },
+      "pages/settings/models": {
+        "component": "models"
+      },
+      "pages/balance": {
+        "component": "balance"
+      },
+      "pages/history": {
+        "component": "history"
+      },
+      "pages/stats": {
+        "component": "stats"
+      },
+      "pages/about": {
+        "component": "about"
+      }
+    }
+  }
+}
