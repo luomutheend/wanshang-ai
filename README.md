@@ -100,7 +100,7 @@ Key 存在 storage 与 `dsdata/api-key.txt` 两处互备，界面上只显示 `s
 ## 从源码构建
 
 ```bash
-git clone https://github.com/<your-name>/wanshang-ai.git
+git clone https://github.com/XZJ78/wanshang-ai.git
 cd wanshang-ai
 npm install          # 会自动生成 src/deepseek/builtinKey.js
 npm run release      # QuickJS 通用版
