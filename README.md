@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/icon-512.png" width="104" alt="腕上AI">
+<img src="docs/images/icon-512.webp" width="104" alt="腕上AI">
 
 # 腕上AI
 
@@ -14,7 +14,7 @@
 
 </div>
 
-![预览](docs/images/kv-1500x1000.png)
+![腕上AI](docs/images/kv.webp)
 
 ## 为什么做这个
 
@@ -26,6 +26,12 @@
 - 长会话不会一次性铺开，默认只渲染最近 20 条，上滑再按批加载
 - 联网搜索的结果先摘出正文再喂给模型，而不是把十条摘要甩进去
 - 退出应用不丢会话，重启后能接着上次聊
+
+## 界面
+
+<div align="center">
+  <img src="docs/images/screen.webp" width="300" alt="对话界面">
+</div>
 
 ## 功能
 
