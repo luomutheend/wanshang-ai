@@ -169,4 +169,13 @@ src/
 
 你可以自由使用、修改、分发，包括商用。但如果你修改后通过网络提供服务，必须同样开源。
 
-第三方组件 `src/components/InputMethod/` 为 Vela 输入法组件，如涉及他人版权请自行核实其授权。
+### 第三方
+
+| 项目 | 授权 | 说明 |
+| --- | --- | --- |
+| [Vela_input_method](https://github.com/NEORUAA/Vela_input_method) | MIT © 2024 NEORUAA | `src/components/InputMethod/`，本项目有裁剪与适配，原声明保留在目录内 |
+| [aiot-toolkit](https://www.npmjs.com/package/aiot-toolkit) | ISC | 构建工具链 |
+| [rspack](https://github.com/web-infra-dev/rspack) | MIT | 打包器 |
+| [TypeScript](https://github.com/microsoft/TypeScript) | Apache-2.0 | 类型检查 |
+
+MIT 与 AGPL-3.0 兼容，本项目整体仍按 AGPL-3.0 分发。
