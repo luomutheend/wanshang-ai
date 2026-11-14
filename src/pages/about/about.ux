@@ -8,7 +8,7 @@
 
       <image class="logo" src="/common/Images/logo/logo.png"></image>
       <text class="app-name">腕上AI</text>
-      <text class="app-ver" @click="onVersionTap">1.2.1 · Vela 快应用</text>
+      <text class="app-ver" @click="onVersionTap">1.2.2 · Vela 快应用</text>
 
       <text class="intro">多轮对话 / 联网搜索 / 余额 / 历史 / 用量统计，适配圆屏、方屏与手环</text>
 

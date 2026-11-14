@@ -239,8 +239,8 @@ export default {
     // QQ 式输入条：紧贴键盘上方，宽度按设计基准 466（=整屏宽）计算
     this.imeBarH = profile.inputBarH
     this.imeBarBottom = profile.kbHeight + 4
-    this.imeBarLeft = 8
-    this.imeBarWidth = 466 - 16
+    this.imeBarLeft = profile.imeBarLeft
+    this.imeBarWidth = profile.imeBarWidth
     this.barBtnW = Math.max(56, Math.round(this.imeBarH * 1.32))
     this.barFont = Math.max(18, Math.round(this.imeBarH * 0.42))
     this.imeH = this.imeBarBottom + this.imeBarH + 8

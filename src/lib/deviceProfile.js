@@ -11,7 +11,9 @@
  *  - round   ：S4 466×466 圆表
  *  - roundBig：S5 / S5 eSIM 480×480 圆表（圆角更大，安全边距另算）
  *  - rect    ：RW5 / RW6 方形表（432×514）
- *  - band    ：手环 9 Pro / 10 Pro（336×480）
+ *  - band    ：小屏手环（宽 < 300）
+ *  - bandPro ：手环 9 Pro / 10 Pro（336×480 长条圆角屏，圆角半径大、
+ *              上下留白要比小屏手环多一些，否则标题和首行会被弧角吃掉）
  *  - pill    ：手环 9 / 10 胶囊屏（192×490 / 212×520）
  *
  * 构建时若指定了 WANSHANG_TARGET（见 quickapp.config.js），
@@ -56,7 +58,8 @@ const FAMILIES = {
         kbBottom: 0,
         kbCvalH: 0,
         contentPct: 0.86,
-        statusPct: 0.78
+        statusPct: 0.78,
+        imeInset: 8
     },
     // 480 圆屏：圆角半径比 466 大一圈，内容左右各再收 2%，
     // 否则设置页的行和输入法预览会贴到弧边上
@@ -73,7 +76,8 @@ const FAMILIES = {
         kbBottom: 0,
         kbCvalH: 0,
         contentPct: 0.84,
-        statusPct: 0.76
+        statusPct: 0.76,
+        imeInset: 8
     },
     rect: {
         key: "rect",
@@ -88,12 +92,13 @@ const FAMILIES = {
         kbBottom: 34,
         kbCvalH: 32,
         contentPct: 0.92,
-        statusPct: 0.92
+        statusPct: 0.92,
+        imeInset: 8
     },
     band: {
         key: "band",
-        label: "手环 9 Pro / 10 Pro",
-        shortLabel: "手环 Pro",
+        label: "小屏手环",
+        shortLabel: "小屏手环",
         shapeText: "长条圆角屏",
         headerTop: 6,
         contentTop: 10,
@@ -103,7 +108,26 @@ const FAMILIES = {
         kbBottom: 34,
         kbCvalH: 32,
         contentPct: 0.92,
-        statusPct: 0.92
+        statusPct: 0.92,
+        imeInset: 14
+    },
+    // 336×480（手环 9 Pro / 10 Pro）：屏更宽更高，但四角圆弧半径也更大。
+    // 内容宽收到 86%，顶部留白翻倍，避免标题栏和第一行被圆角切掉。
+    bandPro: {
+        key: "band",
+        label: "手环 Pro 336×480",
+        shortLabel: "手环 Pro",
+        shapeText: "长条圆角屏",
+        headerTop: 26,
+        contentTop: 34,
+        previewTop: 40,
+        previewX: 24,
+        kbShape: "rect",
+        kbBottom: 30,
+        kbCvalH: 30,
+        contentPct: 0.86,
+        statusPct: 0.86,
+        imeInset: 18
     },
     pill: {
         key: "pill",
@@ -118,7 +142,8 @@ const FAMILIES = {
         kbBottom: 0,
         kbCvalH: 32,
         contentPct: 0.92,
-        statusPct: 0.92
+        statusPct: 0.92,
+        imeInset: 10
     }
 }
 
@@ -144,9 +169,12 @@ export function resolveProfile(info) {
     const shape = normalizeShape(source)
 
     const name = `${source.brand || ""} ${source.model || ""} ${source.product || ""}`.toLowerCase()
+    // 长条形（不看方向）：手环横竖两种上报都可能出现
+    const longSide = Math.max(screenW, screenH)
+    const shortSide = Math.min(screenW, screenH)
     const isBand = source.deviceType === "band" ||
         /band|手环|9p|10p|9 pro|10 pro/.test(name) ||
-        (shape !== "circle" && screenW <= 380)
+        (shape !== "circle" && (shortSide <= 380 && longSide / shortSide >= 1.2))
 
     let family
     if (shape === "circle") {
@@ -155,7 +183,8 @@ export function resolveProfile(info) {
     } else if (shape === "pill-shaped") {
         family = FAMILIES.pill
     } else if (isBand) {
-        family = FAMILIES.band
+        // 336×480 的 Pro 手环单独一档：同样长条屏，但圆角更大、留白更多
+        family = shortSide >= 300 && longSide >= 460 ? FAMILIES.bandPro : FAMILIES.band
     } else {
         family = FAMILIES.rect
     }
@@ -181,6 +210,9 @@ export function resolveProfile(info) {
         rectKb: RECT_KEYBOARD,
         // QQ 式输入条高度（退出 / 预览 / 发送 一行）
         inputBarH: family.key === "round" ? 68 : 60,
+        // 输入条左右留白：手环圆角大，贴边会被切掉一截
+        imeBarLeft: family.imeInset,
+        imeBarWidth: REF_WIDTH - family.imeInset * 2,
         headerH: 88 + family.headerTop,
         deviceText: `${screenW}×${screenH} ${shape}`
     })
@@ -223,6 +255,15 @@ const FIXED_TARGETS = {
         model: "Redmi Watch 5",
         label: "Redmi Watch 5 432×514",
         shortLabel: "RW5"
+    },
+    // 小米手环 10 Pro：1.74" AMOLED，官方标 480×336（竖持即 336 宽 × 480 高）
+    band10p: {
+        screenWidth: 336,
+        screenHeight: 480,
+        screenShape: "rect",
+        model: "Xiaomi Smart Band 10 Pro",
+        label: "小米手环 10 Pro 336×480",
+        shortLabel: "手环 10 Pro"
     }
 }
 
