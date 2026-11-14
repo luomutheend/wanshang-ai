@@ -8,11 +8,17 @@
  *  - 内容安全宽度（避开四角圆弧）
  *
  * 设备族：
- *  - round：S4 / S5 圆形表（S4 466×466，S5 480×480）
- *  - rect ：RW5 / RW6 方形表（432×514）
- *  - band ：手环 9 Pro / 10 Pro（336×480）
- *  - pill ：手环 9 / 10 胶囊屏（192×490 / 212×520）
+ *  - round   ：S4 466×466 圆表
+ *  - roundBig：S5 / S5 eSIM 480×480 圆表（圆角更大，安全边距另算）
+ *  - rect    ：RW5 / RW6 方形表（432×514）
+ *  - band    ：手环 9 Pro / 10 Pro（336×480）
+ *  - pill    ：手环 9 / 10 胶囊屏（192×490 / 212×520）
+ *
+ * 构建时若指定了 WANSHANG_TARGET（见 quickapp.config.js），
+ * 直接采用该机型的固定参数，不再读运行时探测结果。
  */
+
+import { BUILD_TARGET } from "../buildinfo"
 
 const REF_WIDTH = 466
 
@@ -39,8 +45,8 @@ function normalizeShape(info) {
 const FAMILIES = {
     round: {
         key: "round",
-        label: "S4 / S5 圆形表",
-        shortLabel: "圆形表 S4/S5",
+        label: "S4 圆形表 466",
+        shortLabel: "圆屏 466",
         shapeText: "圆形屏",
         headerTop: 10,
         contentTop: 20,
@@ -51,6 +57,23 @@ const FAMILIES = {
         kbCvalH: 0,
         contentPct: 0.86,
         statusPct: 0.78
+    },
+    // 480 圆屏：圆角半径比 466 大一圈，内容左右各再收 2%，
+    // 否则设置页的行和输入法预览会贴到弧边上
+    roundBig: {
+        key: "round",
+        label: "S5 圆形表 480",
+        shortLabel: "圆屏 480",
+        shapeText: "圆形屏",
+        headerTop: 12,
+        contentTop: 22,
+        previewTop: 44,
+        previewX: 52,
+        kbShape: "circle",
+        kbBottom: 0,
+        kbCvalH: 0,
+        contentPct: 0.84,
+        statusPct: 0.76
     },
     rect: {
         key: "rect",
@@ -127,7 +150,8 @@ export function resolveProfile(info) {
 
     let family
     if (shape === "circle") {
-        family = FAMILIES.round
+        // 474 以上按大圆屏处理：S5 系列 480，S4 466
+        family = screenW >= 474 ? FAMILIES.roundBig : FAMILIES.round
     } else if (shape === "pill-shaped") {
         family = FAMILIES.pill
     } else if (isBand) {
@@ -162,10 +186,62 @@ export function resolveProfile(info) {
     })
 }
 
-/** 取当前设备档案；device.getInfo() 的结果由 app.ux 放进 global.DEVICE_INFO */
+/**
+ * 固定机型包。构建时 WANSHANG_TARGET 命中这里，界面参数就完全按表里的屏幕写死，
+ * 不再依赖 device.getInfo()：手表上探测偶尔超时（app.ux 里只等 1000ms），
+ * 一旦拿不到信息就会退回 466 的默认值，在 480 屏上整体偏小、边距也错。
+ */
+const FIXED_TARGETS = {
+    s5esim: {
+        screenWidth: 480,
+        screenHeight: 480,
+        screenShape: "circle",
+        model: "Xiaomi Watch S5 eSIM",
+        label: "Xiaomi Watch S5 eSIM 480",
+        shortLabel: "S5 eSIM"
+    },
+    s5: {
+        screenWidth: 480,
+        screenHeight: 480,
+        screenShape: "circle",
+        model: "Xiaomi Watch S5",
+        label: "Xiaomi Watch S5 480",
+        shortLabel: "S5"
+    },
+    s4: {
+        screenWidth: 466,
+        screenHeight: 466,
+        screenShape: "circle",
+        model: "Xiaomi Watch S4",
+        label: "Xiaomi Watch S4 466",
+        shortLabel: "S4"
+    },
+    rw5: {
+        screenWidth: 432,
+        screenHeight: 514,
+        screenShape: "rect",
+        model: "Redmi Watch 5",
+        label: "Redmi Watch 5 432×514",
+        shortLabel: "RW5"
+    }
+}
+
+export const BUILD_TARGET_NAME = String(BUILD_TARGET || "auto")
+
+/** 取当前设备档案；固定机型包优先，auto 才看 device.getInfo() */
 export function getProfile() {
     if (cached) return cached
+    const fixed = FIXED_TARGETS[BUILD_TARGET_NAME]
+    if (fixed) {
+        cached = resolveProfile(fixed)
+        // 机型名以构建目标为准，日志里能直接看出这是哪个包
+        cached.label = fixed.label
+        cached.shortLabel = fixed.shortLabel
+        cached.buildTarget = BUILD_TARGET_NAME
+        return cached
+    }
     cached = resolveProfile(global.DEVICE_INFO || {})
+    cached.buildTarget = "auto"
     return cached
 }
 

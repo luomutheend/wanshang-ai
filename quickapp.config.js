@@ -15,11 +15,16 @@ const username = os.userInfo().username;
 const buildTime = new Date().toISOString();
 const designWidth = JSON.parse(fs.readFileSync("src/manifest.json")).config.designWidth
 
+// 构建目标机型。设置 WANSHANG_TARGET=s5esim 后，界面参数按该机型写死，
+// 不再依赖运行时 device.getInfo() 的探测结果；auto 仅作兜底。
+const buildTarget = String(process.env.WANSHANG_TARGET || "auto").trim().toLowerCase();
+
 const buildInfoContent = `
   export const GIT_COMMIT_HASH = "${gitCommitHash}";
   export const BUILD_TIME = "${buildTime}";
   export const BUILD_USER = "${username}";
   export const DESIGN_WIDTH = "${designWidth}";
+  export const BUILD_TARGET = "${buildTarget}";
 `;
 
 const buildInfoPath = path.resolve(__dirname, 'src/buildinfo.ts');

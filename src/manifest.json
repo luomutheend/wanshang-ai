@@ -1,8 +1,8 @@
 {
   "package": "org.coratech.deepseek.vela",
   "name": "腕上AI",
-  "versionName": "1.2.0",
-  "versionCode": 3,
+  "versionName": "1.2.1",
+  "versionCode": 4,
   "minPlatformVersion": 1000,
   "icon": "/common/Images/logo/logo.png",
   "designWidth": 466,

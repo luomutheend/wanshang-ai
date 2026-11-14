@@ -21,7 +21,8 @@
     "start": "aiot start --watch --enable-protobuf true",
     "build": "aiot build --enable-protobuf",
     "release": "aiot release --enable-protobuf && node scripts/verify-rpk-signature.js",
-    "release:s5": "aiot release --enable-jsc && node scripts/verify-rpk-signature.js --allow-missing",
+    "release:s5": "WANSHANG_TARGET=s5 aiot release --enable-jsc && node scripts/verify-rpk-signature.js --allow-missing",
+    "release:s5esim": "WANSHANG_TARGET=s5esim aiot release --enable-jsc && node scripts/verify-rpk-signature.js --allow-missing",
     "verify:sign": "node scripts/verify-rpk-signature.js"
   },
   "devDependencies": {
