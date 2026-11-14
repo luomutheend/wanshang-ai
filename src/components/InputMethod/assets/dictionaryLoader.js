@@ -20,15 +20,13 @@ function createDictionaryLoader(root = DEFAULT_ROOT, readText = options => file.
       engine = createInputMethod()
       language = request.lang
     }
-    if (!request.word || (language !== 'cn' && language !== 'jp')) {
+    if (!request.word || language !== 'cn') {
       pending = null
       request.callback({ chars: [], matched: '', multi: null }, request.word)
       return
     }
     let resource = ''
-    if (language === 'jp') {
-      if (!engine.dict.romaji2kanji) resource = 'jp'
-    } else if (!engine.dict.syllableSet) {
+    if (!engine.dict.syllableSet) {
       resource = 'cn'
     } else {
       const letters = engine.requiredShards(request.word)
@@ -42,8 +40,7 @@ function createDictionaryLoader(root = DEFAULT_ROOT, readText = options => file.
     }
     if (!resource) {
       pending = null
-      request.callback(engine.getHanzi(request.word, language),
-        language === 'cn' ? engine.getSegmentedDisplay(request.word) : request.word)
+      request.callback(engine.getHanzi(request.word, language), engine.getSegmentedDisplay(request.word))
       return
     }
     reading = true
@@ -60,7 +57,6 @@ function createDictionaryLoader(root = DEFAULT_ROOT, readText = options => file.
         try {
           const parsed = JSON.parse(data.text)
           if (resource === 'cn') engine.initDict(parsed)
-          else if (resource === 'jp') engine.dict.romaji2kanji = parsed
           else engine.installShard(resource.slice(-1), parsed)
         } catch (failure) { error = failure }
       }

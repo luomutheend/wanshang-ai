@@ -85,10 +85,6 @@ SimpleInputMethod.getSingleHanzi = function(pinyin, lang = 'cn') {
     || (this.dict.py2hz || {})[pinyin]
     || ''
   }
-  else if (lang === 'jp') {
-    return (this.dict.romaji2kanji || {})[pinyin]
-    || ''
-  }
   // en 模式不查候选
   return ''
 }
@@ -459,7 +455,7 @@ SimpleInputMethod.getMultiHanzi = function(pinyin, lang = 'cn') {
 }
 
 SimpleInputMethod.getHanzi = function(pinyin, lang = 'cn') {
-  // Chinese candidates require the base resource; Japanese has its own table.
+  // Chinese candidates require the base resource.
   if (lang === 'cn' && !this.dict.syllableSet) return { chars: [], matched: '', multi: null }
   // 原单字逻辑（首音节同音字串）
   let chars = []

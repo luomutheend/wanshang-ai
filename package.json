@@ -1,6 +1,6 @@
 {
   "name": "wanshang-ai",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "腕上AI —— 小米 Vela 手表上的 AI 助手快应用，支持 DeepSeek 官方接口与自定义 OpenAI 兼容端点、联网搜索、模型切换",
   "engines": {
     "node": ">=8.10"

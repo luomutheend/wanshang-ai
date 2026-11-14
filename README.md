@@ -44,9 +44,9 @@
 
 | 包 | 适用机型 | 屏幕 | 引擎 |
 | --- | --- | --- | --- |
-| `wanshang-ai-1.2.4-band9p-10p.rpk` | 小米手环 9 Pro / 10 Pro | 336×480 长条圆角屏 | JSC |
-| `wanshang-ai-1.2.4-s5.rpk` | Watch S5 / S5 eSIM | 480×480 圆屏 | JSC |
-| `wanshang-ai-1.2.4-rw5-rw6.rpk` | Redmi Watch 5 / 6 | 432×514 方屏 | JSC |
+| `wanshang-ai-1.2.5-band9p-10p.rpk` | 小米手环 9 Pro / 10 Pro | 336×480 长条圆角屏 | JSC |
+| `wanshang-ai-1.2.5-s5.rpk` | Watch S5 / S5 eSIM | 480×480 圆屏 | JSC |
+| `wanshang-ai-1.2.5-rw5-rw6.rpk` | Redmi Watch 5 / 6 | 432×514 方屏 | JSC |
 
 同组机型屏幕参数完全一致（RW5 与 RW6 都是 2.07" AMOLED 432×514；S5 与 S5 eSIM 都是 480×480；手环 9 Pro 与 10 Pro 都是 1.74" AMOLED 480×336），所以一组只出一只包。
 
@@ -55,9 +55,9 @@
 ## 安装
 
 1. 下载对应机型的 `.rpk`：
-   - 小米手环 9 Pro / 10 Pro：[wanshang-ai-1.2.4-band9p-10p.rpk](release/v1.2.4/wanshang-ai-1.2.4-band9p-10p.rpk)
-   - Watch S5 / S5 eSIM：[wanshang-ai-1.2.4-s5.rpk](release/v1.2.4/wanshang-ai-1.2.4-s5.rpk)
-   - Redmi Watch 5 / 6：[wanshang-ai-1.2.4-rw5-rw6.rpk](release/v1.2.4/wanshang-ai-1.2.4-rw5-rw6.rpk)
+   - 小米手环 9 Pro / 10 Pro：[wanshang-ai-1.2.5-band9p-10p.rpk](release/v1.2.5/wanshang-ai-1.2.5-band9p-10p.rpk)
+   - Watch S5 / S5 eSIM：[wanshang-ai-1.2.5-s5.rpk](release/v1.2.5/wanshang-ai-1.2.5-s5.rpk)
+   - Redmi Watch 5 / 6：[wanshang-ai-1.2.5-rw5-rw6.rpk](release/v1.2.5/wanshang-ai-1.2.5-rw5-rw6.rpk)
 2. 手表与手机保持连接，用小米运动健康 / Vela 调试工具推送安装
 3. 首次启动进设置 → 接口，选择模式
 
@@ -138,7 +138,7 @@ src/
 │   ├── apiKeyStore.js        Key 独立存取
 │   └── ui.js                 页面池、GC
 └── components/
-    └── InputMethod/          九宫格中文输入法
+    └── InputMethod/          中文 / 英文输入法
 ```
 
 ## 在 Vela 上踩过的坑
@@ -173,7 +173,7 @@ src/
 
 | 项目 | 授权 | 说明 |
 | --- | --- | --- |
-| [Vela_input_method](https://github.com/NEORUAA/Vela_input_method) | MIT © 2024 NEORUAA | `src/components/InputMethod/`，本项目有裁剪与适配，原声明保留在目录内 |
+| [Vela_input_method](https://github.com/NEORUAA/Vela_input_method) | MIT © 2024 NEORUAA | `src/components/InputMethod/`，取自上游最新版，仅保留中文拼音与英文，日语键盘及词库已移除 |
 | [aiot-toolkit](https://www.npmjs.com/package/aiot-toolkit) | ISC | 构建工具链 |
 | [rspack](https://github.com/web-infra-dev/rspack) | MIT | 打包器 |
 | [TypeScript](https://github.com/microsoft/TypeScript) | Apache-2.0 | 类型检查 |
