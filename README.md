@@ -45,19 +45,18 @@
 | 包 | 引擎 | 适用 |
 | --- | --- | --- |
 | `wanshang-ai-1.2.3-band10p.rpk` | JSC | 小米手环 10 Pro（1.74"，336×480 长条圆角屏） |
-| `wanshang-ai-1.2.3-band10p-qjs.rpk` | QuickJS | 同上机型，JSC 版白屏时的备选 |
 | `wanshang-ai-1.2.3-s5-esim.rpk` | JSC | Watch S5 eSIM（48mm，480×480） |
 | `wanshang-ai-1.2.3-s5-jsc.rpk` | JSC | Watch S5 46mm 等 480 圆屏 |
 | `wanshang-ai-1.2.3.rpk` | QuickJS | S1 Pro、Watch S3 / S4 / S6 等 466 圆屏（auto 自适应） |
 
-装错的表现是白屏或闪退。机型不在表里就按屏宽选：466 圆屏用 QuickJS 版，480 圆屏用 S5 版。
+手环 10 Pro 与 S5 系列**只提供 JSC 包**，不再出 QuickJS 版本。装错引擎的表现是白屏或闪退。机型不在表里就按屏宽选：466 圆屏用上面的通用版，480 圆屏用 S5 版。
 
 手环 10 Pro 这一档在安全边距上和手表不同：屏幕宽只有 336，四角圆弧半径却更大，所以内容宽度收到 86%、顶部留白翻倍、输入条左右各留 18（设计单位），否则标题栏和第一行会被弧角切掉。
 
 ## 安装
 
 1. 下载对应机型的 `.rpk`：
-   - 手环 10 Pro：[wanshang-ai-1.2.3-band10p.rpk](release/v1.2.3/wanshang-ai-1.2.3-band10p.rpk)（JSC；白屏就换 [QuickJS 备选](release/v1.2.3/wanshang-ai-1.2.3-band10p-qjs.rpk)）
+   - 手环 10 Pro：[wanshang-ai-1.2.3-band10p.rpk](release/v1.2.3/wanshang-ai-1.2.3-band10p.rpk)
    - Watch S5 eSIM：[wanshang-ai-1.2.3-s5-esim.rpk](release/v1.2.3/wanshang-ai-1.2.3-s5-esim.rpk)
    - Watch S5 / 480 圆屏：[wanshang-ai-1.2.3-s5-jsc.rpk](release/v1.2.3/wanshang-ai-1.2.3-s5-jsc.rpk)
    - S1 Pro / S3 / S4 / S6 等 466 圆屏：[wanshang-ai-1.2.3.rpk](release/v1.2.3/wanshang-ai-1.2.3.rpk)
@@ -107,7 +106,6 @@ npm run release         # QuickJS，auto 自适应（仅作兜底）
 npm run release:s5      # JSC，Watch S5 480 圆屏
 npm run release:s5esim  # JSC，Watch S5 eSIM 480 圆屏（参数写死）
 npm run release:band10p # JSC，小米手环 10 Pro 336×480（参数写死）
-# 备选引擎：WANSHANG_TARGET=band10p aiot release --enable-protobuf
 ```
 
 产物在 `dist/`。`WANSHANG_TARGET` 决定把哪套屏幕参数写死，可选值见 `src/lib/deviceProfile.js` 的 `FIXED_TARGETS`；新增机型在那里加一行，再加一个 `release:<机型>` 脚本即可。
