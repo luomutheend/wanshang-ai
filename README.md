@@ -40,26 +40,24 @@
 
 ## 适配机型
 
-从 v1.2.1 起按机型单独出包：屏幕尺寸、安全边距、键盘高度在**构建时写死**，不再依赖运行时探测。以前那套自适应逻辑只留作 `auto` 兜底。
+每个包对应一组**同屏幕**的机型，屏幕尺寸、安全边距、键盘高度在构建时写死，不依赖运行时探测。只出下面三个包，不再提供通用包。
 
-| 包 | 引擎 | 适用 |
-| --- | --- | --- |
-| `wanshang-ai-1.2.3-band10p.rpk` | JSC | 小米手环 10 Pro（1.74"，336×480 长条圆角屏） |
-| `wanshang-ai-1.2.3-s5-esim.rpk` | JSC | Watch S5 eSIM（48mm，480×480） |
-| `wanshang-ai-1.2.3-s5-jsc.rpk` | JSC | Watch S5 46mm 等 480 圆屏 |
-| `wanshang-ai-1.2.3.rpk` | QuickJS | S1 Pro、Watch S3 / S4 / S6 等 466 圆屏（auto 自适应） |
+| 包 | 适用机型 | 屏幕 | 引擎 |
+| --- | --- | --- | --- |
+| `wanshang-ai-1.2.4-band9p-10p.rpk` | 小米手环 9 Pro / 10 Pro | 336×480 长条圆角屏 | JSC |
+| `wanshang-ai-1.2.4-s5.rpk` | Watch S5 / S5 eSIM | 480×480 圆屏 | JSC |
+| `wanshang-ai-1.2.4-rw5-rw6.rpk` | Redmi Watch 5 / 6 | 432×514 方屏 | JSC |
 
-手环 10 Pro 与 S5 系列**只提供 JSC 包**，不再出 QuickJS 版本。装错引擎的表现是白屏或闪退。机型不在表里就按屏宽选：466 圆屏用上面的通用版，480 圆屏用 S5 版。
+同组机型屏幕参数完全一致（RW5 与 RW6 都是 2.07" AMOLED 432×514；S5 与 S5 eSIM 都是 480×480；手环 9 Pro 与 10 Pro 都是 1.74" AMOLED 480×336），所以一组只出一只包。
 
-手环 10 Pro 这一档在安全边距上和手表不同：屏幕宽只有 336，四角圆弧半径却更大，所以内容宽度收到 86%、顶部留白翻倍、输入条左右各留 18（设计单位），否则标题栏和第一行会被弧角切掉。
+手环这一档在安全边距上和手表不同：屏幕宽只有 336，四角圆弧半径却更大，所以内容宽度收到 86%、顶部留白翻倍、输入条左右各留 18（设计单位），否则标题栏和第一行会被弧角切掉。
 
 ## 安装
 
 1. 下载对应机型的 `.rpk`：
-   - 手环 10 Pro：[wanshang-ai-1.2.3-band10p.rpk](release/v1.2.3/wanshang-ai-1.2.3-band10p.rpk)
-   - Watch S5 eSIM：[wanshang-ai-1.2.3-s5-esim.rpk](release/v1.2.3/wanshang-ai-1.2.3-s5-esim.rpk)
-   - Watch S5 / 480 圆屏：[wanshang-ai-1.2.3-s5-jsc.rpk](release/v1.2.3/wanshang-ai-1.2.3-s5-jsc.rpk)
-   - S1 Pro / S3 / S4 / S6 等 466 圆屏：[wanshang-ai-1.2.3.rpk](release/v1.2.3/wanshang-ai-1.2.3.rpk)
+   - 小米手环 9 Pro / 10 Pro：[wanshang-ai-1.2.4-band9p-10p.rpk](release/v1.2.4/wanshang-ai-1.2.4-band9p-10p.rpk)
+   - Watch S5 / S5 eSIM：[wanshang-ai-1.2.4-s5.rpk](release/v1.2.4/wanshang-ai-1.2.4-s5.rpk)
+   - Redmi Watch 5 / 6：[wanshang-ai-1.2.4-rw5-rw6.rpk](release/v1.2.4/wanshang-ai-1.2.4-rw5-rw6.rpk)
 2. 手表与手机保持连接，用小米运动健康 / Vela 调试工具推送安装
 3. 首次启动进设置 → 接口，选择模式
 
@@ -102,10 +100,10 @@ Key 存在 storage 与 `dsdata/api-key.txt` 两处互备，界面上只显示 `s
 git clone https://github.com/luomutheend/wanshang-ai.git
 cd wanshang-ai
 npm install          # 会自动生成 src/deepseek/builtinKey.js
-npm run release         # QuickJS，auto 自适应（仅作兜底）
-npm run release:s5      # JSC，Watch S5 480 圆屏
-npm run release:s5esim  # JSC，Watch S5 eSIM 480 圆屏（参数写死）
-npm run release:band10p # JSC，小米手环 10 Pro 336×480（参数写死）
+npm run release          # 依次打三个机型包，自动归档到 release/v<版本>/
+npm run release:rw5      # 只打 Redmi Watch 5 / 6    432×514
+npm run release:s5       # 只打 Watch S5 / S5 eSIM   480×480
+npm run release:bandpro  # 只打手环 9 Pro / 10 Pro    336×480
 ```
 
 产物在 `dist/`。`WANSHANG_TARGET` 决定把哪套屏幕参数写死，可选值见 `src/lib/deviceProfile.js` 的 `FIXED_TARGETS`；新增机型在那里加一行，再加一个 `release:<机型>` 脚本即可。

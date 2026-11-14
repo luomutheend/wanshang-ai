@@ -219,51 +219,40 @@ export function resolveProfile(info) {
 }
 
 /**
- * 固定机型包。构建时 WANSHANG_TARGET 命中这里，界面参数就完全按表里的屏幕写死，
+ * 固定机型包。一只包只覆盖同屏幕的一组机型：
+ *  - rw5      ：Redmi Watch 5 / 6（2.07" AMOLED，432×514 方屏）
+ *  - s5       ：Watch S5 / S5 eSIM（480×480 圆屏）
+ *  - bandpro  ：手环 9 Pro / 10 Pro（1.74" AMOLED，336×480）
+ *
+ * 构建时 WANSHANG_TARGET 命中这里，界面参数就完全按表里的屏幕写死，
  * 不再依赖 device.getInfo()：手表上探测偶尔超时（app.ux 里只等 1000ms），
  * 一旦拿不到信息就会退回 466 的默认值，在 480 屏上整体偏小、边距也错。
  */
 const FIXED_TARGETS = {
-    s5esim: {
-        screenWidth: 480,
-        screenHeight: 480,
-        screenShape: "circle",
-        model: "Xiaomi Watch S5 eSIM",
-        label: "Xiaomi Watch S5 eSIM 480",
-        shortLabel: "S5 eSIM"
+    rw5: {
+        screenWidth: 432,
+        screenHeight: 514,
+        screenShape: "rect",
+        model: "Redmi Watch 5 / 6",
+        label: "Redmi Watch 5 / 6 432×514",
+        shortLabel: "RW5/6"
     },
     s5: {
         screenWidth: 480,
         screenHeight: 480,
         screenShape: "circle",
-        model: "Xiaomi Watch S5",
+        model: "Xiaomi Watch S5 / S5 eSIM",
         label: "Xiaomi Watch S5 480",
         shortLabel: "S5"
     },
-    s4: {
-        screenWidth: 466,
-        screenHeight: 466,
-        screenShape: "circle",
-        model: "Xiaomi Watch S4",
-        label: "Xiaomi Watch S4 466",
-        shortLabel: "S4"
-    },
-    rw5: {
-        screenWidth: 432,
-        screenHeight: 514,
-        screenShape: "rect",
-        model: "Redmi Watch 5",
-        label: "Redmi Watch 5 432×514",
-        shortLabel: "RW5"
-    },
-    // 小米手环 10 Pro：1.74" AMOLED，官方标 480×336（竖持即 336 宽 × 480 高）
-    band10p: {
+    // 手环 9 Pro / 10 Pro：同为 1.74" AMOLED，官方标 480×336（竖持即 336 宽 × 480 高）
+    bandpro: {
         screenWidth: 336,
         screenHeight: 480,
         screenShape: "rect",
-        model: "Xiaomi Smart Band 10 Pro",
-        label: "小米手环 10 Pro 336×480",
-        shortLabel: "手环 10 Pro"
+        model: "Xiaomi Smart Band 9 Pro / 10 Pro",
+        label: "小米手环 9 Pro / 10 Pro 336×480",
+        shortLabel: "手环 9P/10P"
     }
 }
 
