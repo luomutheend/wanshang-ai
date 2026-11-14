@@ -88,11 +88,13 @@ export default {
     //
     // 注意要等 store.ready：storage 读超时会让 init 拖到好几秒，
     // 这时补读会撞上「还没开始读」，白跑一趟。
-    let bootRetry = 0;
+    let bootTry = 0;
+    const BOOT_TRY_MAX = 8;
     const retryBootRead = async () => {
-      if (!store.ready && bootRetry < 5) {
-        bootRetry += 1;
-        setTimeout(retryBootRead, 800);
+      bootTry += 1;
+      // store 还没读完就等一轮，这时补读只会白跑
+      if (!store.ready) {
+        if (bootTry < BOOT_TRY_MAX) setTimeout(retryBootRead, 800);
         return;
       }
       try {
@@ -107,6 +109,11 @@ export default {
         if (!isSessionsLoaded()) await warmupSessions();
       } catch (e) {
         logger.error(`[boot] sessions retry failed: ${JSON.stringify(e)}`);
+      }
+      // 还是没读上来就接着试。读失败期间用户发的消息只在内存里，
+      // 只补一次的话，storage 服务晚几秒恢复就再也没机会落盘（退出即丢）。
+      if ((store.loadFailed || !isSessionsLoaded()) && bootTry < BOOT_TRY_MAX) {
+        setTimeout(retryBootRead, 1500);
       }
     };
     setTimeout(retryBootRead, 1200);

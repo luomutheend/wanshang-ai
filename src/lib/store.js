@@ -71,6 +71,19 @@ function parsePayload(raw) {
  * 被当成「没有数据」，随后 300ms 的落盘把默认配置 + 空 kv 写回去，
  * 表现就是「除了独立保存的 API Key，其他全丢」。
  */
+/**
+ * storage 的 key 不存在（Vela：code 201）和真正的读取失败必须分开。
+ * 把「没有数据」当成「没读到」会让首次安装直接进只读模式，配置永远存不下来。
+ */
+function isMissingKey(err) {
+    if (!err) return false
+    if (Number(err.code) === 201) return true
+    const msg = String(err.message || err).toLowerCase()
+    return msg.indexOf("not found") >= 0 ||
+        msg.indexOf("not exist") >= 0 ||
+        msg.indexOf("no such") >= 0
+}
+
 async function readStoragePayload() {
     if (!storage || typeof storage.get !== "function") return { ok: false, data: null }
     try {
@@ -84,6 +97,8 @@ async function readStoragePayload() {
         // 有内容但解析不出来：可能是上一次写到一半，不能当成空
         return data ? { ok: true, data } : { ok: false, data: null }
     } catch (e) {
+        // key 不存在 = 首次安装，属于「确实没有」，不是失败
+        if (isMissingKey(e)) return { ok: true, data: null }
         return { ok: false, data: null }
     }
 }
@@ -130,6 +145,9 @@ class Store {
         this.loadFailed = false
         // 本次启动里用户改过的配置字段，补读时用来压过磁盘上的旧值
         this._userChanges = {}
+        // 本次启动里写过的 kv 键。补读时只有这些键能压过磁盘，
+        // 否则启动时读到的旧 tokenStats 会把分项里的新统计盖回去
+        this._kvChanges = {}
         // 退出流程中：只尝试 storage，不再走文件兜底。
         // 销毁阶段 mkdir/writeText 很容易不回调，拖着进程退不干净。
         this.exiting = false
@@ -180,10 +198,21 @@ class Store {
                 await sleep(1)
                 fromLegacy = await readFilePayload(LEGACY_STORE_PATH)
             }
-        } else if (!fromStorage.v2) {
-            // 一次性迁移：老版本每次都是 storage + 文件双写，可能文件那份更新。
-            // 只在这一版第一次启动时比对一次，之后写盘会带上 v2 标记，不再读文件。
-            fromFile = await readFilePayload(STORE_PATH)
+        } else {
+            // storage 读到了也要看另外三路：
+            // 1) 文件：整包 JSON 会随 kv 一起长大，一旦超过 storage 单值上限，
+            //    写入就静默降级到文件，而 storage 里还留着上一次成功写入的旧副本，
+            //    只看 storage 会一直读到旧数据（token 统计回退就是这么来的）；
+            // 2) 分项：整包写失败时配置与统计会拆开单独存，那是比整包更新的数据。
+            // 全部拿到，下面按 savedAt 取新的。
+            const [filePayload, cfgMirror, statMirror] = await Promise.all([
+                readFilePayload(STORE_PATH),
+                readStorageJson(CONFIG_STORAGE_KEY),
+                readStorageJson(STATS_STORAGE_KEY)
+            ])
+            fromFile = filePayload
+            configMirror = cfgMirror
+            statsMirror = statMirror
         }
 
         const candidates = [
@@ -246,29 +275,55 @@ class Store {
      */
     async retryLoad() {
         if (!this.loadFailed) return true
-        const res = await readStoragePayload()
-        if (!res.ok && !res.data) return false
+        // 整包之外还要看两个分项：整包可能因为体积超限一直写不进去，
+        // 真正最新的配置与统计只在分项里。原来补读只读整包，等于把旧值接了回来。
+        const [res, cfgMirror, statMirror] = await Promise.all([
+            readStoragePayload(),
+            readStorageJson(CONFIG_STORAGE_KEY),
+            readStorageJson(STATS_STORAGE_KEY)
+        ])
+        const hasAny = !!(res.data || cfgMirror || statMirror)
+        if (!res.ok && !hasAny) return false
         this.loadFailed = false
-        if (!res.data) {
+        if (!hasAny) {
             // 这次读成功且确实是空的：按首次安装处理
             this.loadSource = "系统存储"
             this._schedule()
             return true
         }
-        const raw = res.data
-        this.config = Object.assign({}, DEFAULT_CONFIG, raw.config, this._userChanges)
-        if (raw.kv && typeof raw.kv === "object") {
-            const diskKv = Object.assign({}, raw.kv)
-            if (diskKv.chatSessions) {
-                this.legacySessions = diskKv.chatSessions
-                delete diskKv.chatSessions
-            }
-            // 本次运行产生的 kv 优先（例如刚写入的 tokenStats）
-            this.kv = Object.assign(diskKv, this.kv)
+
+        const raw = res.data || {}
+        const rawAt = Number(raw.savedAt) || 0
+
+        // 配置：整包与分项取新的一份，本次启动的改动最后覆盖
+        let config = raw.config && typeof raw.config === "object" ? raw.config : null
+        let configAt = config ? rawAt : -1
+        if (cfgMirror && cfgMirror.config && (Number(cfgMirror.savedAt) || 0) >= configAt) {
+            config = cfgMirror.config
+            configAt = Number(cfgMirror.savedAt) || 0
         }
+        this.config = Object.assign({}, DEFAULT_CONFIG, config || {}, this._userChanges)
+
+        const diskKv = Object.assign({}, raw.kv && typeof raw.kv === "object" ? raw.kv : {})
+        if (diskKv.chatSessions) {
+            this.legacySessions = diskKv.chatSessions
+            delete diskKv.chatSessions
+        }
+        // 分项统计比整包新：以分项为准
+        if (statMirror && statMirror.stats && (Number(statMirror.savedAt) || 0) > rawAt) {
+            diskKv.tokenStats = statMirror.stats
+        }
+        // 只有本次启动真正写过的键才压过磁盘。全量 Object.assign(diskKv, this.kv)
+        // 会把启动时读进来的旧值当成新值带回去，统计就退回到上一次的数。
+        for (const key in this._kvChanges) {
+            if (this.kv[key] === undefined) delete diskKv[key]
+            else diskKv[key] = this.kv[key]
+        }
+        this.kv = diskKv
+        this._kvChanges = {}
         this._userChanges = {}
         this.loadSource = "系统存储(补读)"
-        this.loadedSavedAt = Number(raw.savedAt) || 0
+        this.loadedSavedAt = rawAt
         this._schedule()
         return true
     }
@@ -304,12 +359,14 @@ class Store {
     /** 写入 KV（异步落盘） */
     set(key, value) {
         this.kv[key] = value
+        this._kvChanges[key] = true
         this._schedule()
         return Promise.resolve(value)
     }
 
     remove(key) {
         delete this.kv[key]
+        this._kvChanges[key] = true
         this._schedule()
     }
 
@@ -397,6 +454,7 @@ class Store {
 
         // storage 写成功就到此为止：文件只作为 storage 不可用时的兜底，
         // 避免每次保存都多打一轮 mkdir + writeText。
+        let fileWritten = false
         if (!persisted && !this.exiting && file && typeof file.writeText === "function") {
             // mkdir 也可能不回调，一并限时；失败后面会退到旧路径
             try {
@@ -408,6 +466,7 @@ class Store {
                 await withTimeout(
                     asyncify(file.writeText, { uri: STORE_PATH, text }), 1500, "file write timeout")
                 persisted = true
+                fileWritten = true
             } catch (e) {
                 lastError = e
                 // 子目录不可写时退回旧路径
@@ -415,9 +474,20 @@ class Store {
                     await withTimeout(
                         asyncify(file.writeText, { uri: LEGACY_STORE_PATH, text }), 1500, "file write timeout")
                     persisted = true
+                    fileWritten = true
                 } catch (err) {
                     lastError = err
                 }
+            }
+        }
+        // 新数据落到了文件里，就把 storage 里那份旧的删掉：
+        // 留着它，下次启动会先读到旧整包，比文件旧却更"可信"，新配置和统计看着就像没保存。
+        if (fileWritten && storage && typeof storage.delete === "function") {
+            try {
+                await withTimeout(
+                    asyncify(storage.delete, { key: STORAGE_KEY }), 800, "storage delete timeout")
+            } catch (e) {
+                // 删不掉也不要紧：init 现在两路都读，会按 savedAt 取新的
             }
         }
 

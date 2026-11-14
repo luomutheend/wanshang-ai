@@ -44,11 +44,11 @@
 
 | 包 | 引擎 | 适用 |
 | --- | --- | --- |
-| `wanshang-ai-1.2.2-band10p.rpk` | JSC | 小米手环 10 Pro（1.74"，336×480 长条圆角屏） |
-| `wanshang-ai-1.2.2-band10p-qjs.rpk` | QuickJS | 同上机型，JSC 版白屏时的备选 |
-| `wanshang-ai-1.2.1-s5-esim.rpk` | JSC | Watch S5 eSIM（48mm，480×480） |
-| `wanshang-ai-1.2.0-s5-jsc.rpk` | JSC | Watch S5 46mm 等 480 圆屏 |
-| `wanshang-ai-1.2.0.rpk` | QuickJS | S1 Pro、Watch S3 / S4 / S6 等 466 圆屏（最后一代自适应包） |
+| `wanshang-ai-1.2.3-band10p.rpk` | JSC | 小米手环 10 Pro（1.74"，336×480 长条圆角屏） |
+| `wanshang-ai-1.2.3-band10p-qjs.rpk` | QuickJS | 同上机型，JSC 版白屏时的备选 |
+| `wanshang-ai-1.2.3-s5-esim.rpk` | JSC | Watch S5 eSIM（48mm，480×480） |
+| `wanshang-ai-1.2.3-s5-jsc.rpk` | JSC | Watch S5 46mm 等 480 圆屏 |
+| `wanshang-ai-1.2.3.rpk` | QuickJS | S1 Pro、Watch S3 / S4 / S6 等 466 圆屏（auto 自适应） |
 
 装错的表现是白屏或闪退。机型不在表里就按屏宽选：466 圆屏用 QuickJS 版，480 圆屏用 S5 版。
 
@@ -57,10 +57,10 @@
 ## 安装
 
 1. 下载对应机型的 `.rpk`：
-   - 手环 10 Pro：[wanshang-ai-1.2.2-band10p.rpk](release/v1.2.2/wanshang-ai-1.2.2-band10p.rpk)（JSC；白屏就换 [QuickJS 备选](release/v1.2.2/wanshang-ai-1.2.2-band10p-qjs.rpk)）
-   - Watch S5 eSIM：[wanshang-ai-1.2.1-s5-esim.rpk](release/v1.2.1/wanshang-ai-1.2.1-s5-esim.rpk)
-   - Watch S5 / 480 圆屏：[wanshang-ai-1.2.0-s5-jsc.rpk](release/v1.2.0/wanshang-ai-1.2.0-s5-jsc.rpk)
-   - S1 Pro / S3 / S4 / S6 等 466 圆屏：[wanshang-ai-1.2.0.rpk](release/v1.2.0/wanshang-ai-1.2.0.rpk)
+   - 手环 10 Pro：[wanshang-ai-1.2.3-band10p.rpk](release/v1.2.3/wanshang-ai-1.2.3-band10p.rpk)（JSC；白屏就换 [QuickJS 备选](release/v1.2.3/wanshang-ai-1.2.3-band10p-qjs.rpk)）
+   - Watch S5 eSIM：[wanshang-ai-1.2.3-s5-esim.rpk](release/v1.2.3/wanshang-ai-1.2.3-s5-esim.rpk)
+   - Watch S5 / 480 圆屏：[wanshang-ai-1.2.3-s5-jsc.rpk](release/v1.2.3/wanshang-ai-1.2.3-s5-jsc.rpk)
+   - S1 Pro / S3 / S4 / S6 等 466 圆屏：[wanshang-ai-1.2.3.rpk](release/v1.2.3/wanshang-ai-1.2.3.rpk)
 2. 手表与手机保持连接，用小米运动健康 / Vela 调试工具推送安装
 3. 首次启动进设置 → 接口，选择模式
 

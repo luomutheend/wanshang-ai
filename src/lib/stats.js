@@ -77,12 +77,14 @@ export function recordUsage(usage, model, promptText, replyText) {
     const stats = getStats()
     stats.prompt += prompt
     stats.completion += completion
-    stats.total += total
-    stats.requests += 1
+    // 合计一律按分项相加。服务端偶尔只给 total（或把缓存命中从 total 里扣掉），
+    // 直接累加 total 会出现「合计 ≠ 输入 + 输出」，页面上看着就像统计坏了。
+    stats.total = stats.prompt + stats.completion
+    stats.requests = safeNumber(stats.requests) + 1
     if (estimated) stats.estimated = safeNumber(stats.estimated) + 1
     stats.lastPrompt = prompt
     stats.lastCompletion = completion
-    stats.lastTotal = total
+    stats.lastTotal = prompt + completion
     stats.lastAt = Date.now()
     stats.lastModel = String(model || "")
     store.set(STATS_KEY, stats)

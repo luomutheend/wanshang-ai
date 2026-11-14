@@ -53,6 +53,9 @@ let cache = null
 let loaded = false
 let loadedFrom = "无"
 let dirty = false
+// 启动读盘失败期间产生的改动：先存着，等加载成功再一起写。
+// 以前这些改动会被 scheduleWrite 直接丢掉，退出重进就再也找不回来了。
+let pendingForLoad = false
 let writeTimer = null
 let writeChain = Promise.resolve()
 let coldTimer = null
@@ -109,60 +112,95 @@ function parseList(text) {
     try {
         const obj = JSON.parse(text)
         // v2 是 { v: 2, savedAt, list }；老格式可能直接是数组
-        if (Array.isArray(obj)) return { list: obj, legacy: true }
-        if (obj && Array.isArray(obj.list)) return { list: obj.list, legacy: false }
+        if (Array.isArray(obj)) return { list: obj, legacy: true, savedAt: 0 }
+        if (obj && Array.isArray(obj.list)) {
+            return { list: obj.list, legacy: false, savedAt: Number(obj.savedAt) || 0 }
+        }
     } catch (e) {
         // 损坏的数据按「没有」处理
     }
     return null
 }
 
+async function readStorageSessions() {
+    if (!storage || typeof storage.get !== "function") return { ok: false, parsed: null }
+    try {
+        const res = await withTimeout(
+            asyncify(storage.get, { key: STORAGE_KEY }), 1200, "storage read timeout")
+        const text = typeof res === "string" ? res : (res && res.data)
+        // 读成功但为空：可能是首次安装，也可能上次写入失败被清掉了
+        if (typeof text !== "string" || !text) return { ok: true, parsed: null }
+        const parsed = parseList(text)
+        // 有内容却解析不出来：写到一半或损坏，不能当空
+        return parsed ? { ok: true, parsed } : { ok: false, parsed: null }
+    } catch (e) {
+        // Vela 的 storage.get 在 key 不存在时会走 fail（code 201）。
+        // 这不是「没读到」而是「确定没有」，否则全新安装的第一次启动就会被判成
+        // 读取失败，loaded 永远是 false，之后所有会话都写不进盘——历史彻底存不住。
+        if (isMissingKey(e)) return { ok: true, parsed: null }
+        return { ok: false, parsed: null }
+    }
+}
+
+/** storage 的 key 不存在（Vela：code 201）与真正的读取失败要分开处理 */
+function isMissingKey(err) {
+    if (!err) return false
+    if (Number(err.code) === 201) return true
+    const msg = String(err.message || err).toLowerCase()
+    return msg.indexOf("not found") >= 0 ||
+        msg.indexOf("not exist") >= 0 ||
+        msg.indexOf("no such") >= 0 ||
+        msg.indexOf("not found key") >= 0
+}
+
+async function readFileSessions() {
+    if (!file || typeof file.readText !== "function") return null
+    try {
+        const res = await withTimeout(
+            asyncify(file.readText, { uri: FILE_PATH }), 1200, "file read timeout")
+        return parseList(res && res.text)
+    } catch (e) {
+        // 首次安装时文件本来就不存在，这不算读失败
+        return null
+    }
+}
+
 /**
- * 读独立存储：先 storage，失败再看文件。
+ * 读独立存储：storage 与文件两路都读，按 savedAt 取新的那份。
+ *
+ * 之前的写法是「storage 读到就用，读不到才看文件」。问题在于 storage 单值有体积上限：
+ * 会话攒到几十 KB 之后 storage.set 开始失败，写盘自动降级到文件，可 storage 里那份
+ * 旧数据还在。于是每次启动都读到旧的那份，新会话在磁盘上明明存在却永远显示不出来，
+ * 表现就是「历史会话无法保存」。
  *
  * 返回 { ok, parsed }，把「确实没有历史」和「这次没读到」分开：
  * - ok=true, parsed=null：读取成功，确实没有
- * - ok=false：storage 超时/异常，或内容损坏——此时绝不能把空列表当成事实
- *
- * 退出后立刻重进时 storage 常常不回调，原来的写法会当成「没有历史」，
- * 首页随后一保存就把磁盘上那份完整历史覆盖成一条新会话。
+ * - ok=false：两路都没读到/都损坏——此时绝不能把空列表当成事实
  */
 async function readPersisted() {
-    let storageOk = false
-    if (storage && typeof storage.get === "function") {
-        try {
-            const res = await withTimeout(
-                asyncify(storage.get, { key: STORAGE_KEY }), 1200, "storage read timeout")
-            const text = typeof res === "string" ? res : (res && res.data)
-            if (typeof text !== "string" || !text) {
-                // 读成功但为空：可能是首次安装，先记下，再看文件有没有备份
-                storageOk = true
-            } else {
-                const parsed = parseList(text)
-                if (parsed) {
-                    loadedFrom = "系统存储"
-                    return { ok: true, parsed }
-                }
-                // 有内容却解析不出来：写到一半或损坏，不能当空
-                return { ok: false, parsed: null }
-            }
-        } catch (e) {
-            storageOk = false
-        }
+    const pair = await Promise.all([readStorageSessions(), readFileSessions()])
+    const fromStore = pair[0]
+    const fromFile = pair[1]
+
+    const storageParsed = fromStore && fromStore.parsed
+    const fileAt = fromFile ? Number(fromFile.savedAt) || 0 : 0
+    const storeAt = storageParsed ? Number(storageParsed.savedAt) || 0 : 0
+
+    let chosen = null
+    if (storageParsed && fromFile) {
+        // savedAt 相同（或都是老格式 0）时以 storage 为准，它是主通道
+        chosen = fileAt > storeAt ? fromFile : storageParsed
+        loadedFrom = chosen === fromFile ? "文件存储" : "系统存储"
+    } else if (storageParsed) {
+        chosen = storageParsed
+        loadedFrom = "系统存储"
+    } else if (fromFile) {
+        chosen = fromFile
+        loadedFrom = "文件存储"
     }
-    if (file && typeof file.readText === "function") {
-        try {
-            const res = await withTimeout(
-                asyncify(file.readText, { uri: FILE_PATH }), 1200, "file read timeout")
-            const parsed = parseList(res && res.text)
-            if (parsed) {
-                loadedFrom = "文件存储"
-                return { ok: true, parsed }
-            }
-        } catch (e) {
-            // 首次安装时文件本来就不存在，这不算读失败
-        }
-    }
+    if (chosen) return { ok: true, parsed: chosen }
+
+    const storageOk = !!(fromStore && fromStore.ok)
     return { ok: storageOk, parsed: null }
 }
 
@@ -173,6 +211,10 @@ async function readPersisted() {
 export async function warmup() {
     if (loaded) return cache
     if (!store.ready) return null
+
+    // 读盘失败期间用户可能已经发了几条消息，它们只活在内存里。
+    // 重建 cache 前先留住，后面合并回去，否则这次补读成功反而把它们冲掉。
+    const carried = pendingForLoad && cache && cache.length ? cache.slice() : null
 
     let raw = null
     let needWrite = false
@@ -257,6 +299,18 @@ export async function warmup() {
         }
     }
 
+    // 把加载失败期间攒下的会话并回来：磁盘上没有的才算新，同 id 以磁盘为准
+    if (carried && carried.length) {
+        const known = {}
+        for (let i = 0; i < list.length; i++) known[list[i].id] = true
+        for (let i = 0; i < carried.length; i++) {
+            const session = carried[i]
+            if (!session || !session.messages || !session.messages.length) continue
+            if (known[session.id]) continue
+            list.push(session)
+        }
+    }
+
     list.sort((a, b) => b.updatedAt - a.updatedAt)
     if (list.length > SESSION_LIMIT) list.length = SESSION_LIMIT
     cache = list
@@ -268,10 +322,10 @@ export async function warmup() {
 
     // kv 里的旧副本彻底删掉：内存里已经有一份，留着只会被 store.flush 再序列化一遍
     if (store.get(LEGACY_KV_KEY, null)) store.remove(LEGACY_KV_KEY)
-    if (needWrite) {
-        // 迁移必须立刻落盘：store.json 里的旧会话在下次 flush 就会被剔除，
-        // 这中间如果应用被杀，数据就只剩内存这一份了。
+    if (needWrite || pendingForLoad) {
+        // 迁移、以及「读盘失败期间攒下的改动」，都必须立刻落一次盘。
         // 走 flushNow 而不是直接 writeOnce，保证和后面的写盘排在同一条队列上。
+        pendingForLoad = false
         dirty = true
         flushNow().catch(() => {
             // 写失败保留 dirty，后面的合并窗口会再试
@@ -371,6 +425,7 @@ async function writeOnce() {
     dehydrateCold()
 
     let ok = false
+    let fileWritten = false
     if (storage && typeof storage.set === "function") {
         try {
             await withTimeout(
@@ -390,8 +445,20 @@ async function writeOnce() {
             await withTimeout(
                 asyncify(file.writeText, { uri: FILE_PATH, text: payload }), 1500, "file write timeout")
             ok = true
+            fileWritten = true
         } catch (e) {
             ok = false
+        }
+    }
+    // 新数据已经落到文件里，就把 storage 里那份旧的删掉。
+    // 留着它的话，下次启动会读到更旧的一份（storage 优先），
+    // 新会话看着就像没保存成功。删失败也不要紧：readPersisted 会按 savedAt 取新的。
+    if (fileWritten && storage && typeof storage.delete === "function") {
+        try {
+            await withTimeout(
+                asyncify(storage.delete, { key: STORAGE_KEY }), 800, "storage delete timeout")
+        } catch (e) {
+            // 忽略
         }
     }
     if (!ok) {
@@ -403,8 +470,14 @@ async function writeOnce() {
 }
 
 export function flushNow() {
-    // 没成功加载过就绝不写盘：空 cache 落盘会把磁盘上的历史整包覆盖掉
-    if (!loaded || !dirty) return Promise.resolve(true)
+    if (!dirty) return Promise.resolve(true)
+    // 还没成功读过盘：先补读一次，读到了才能安全写。
+    // 仍然读不到就保持不写——空 cache 落盘会把磁盘上的历史整包覆盖掉。
+    if (!loaded) {
+        return warmup()
+            .then(res => (res ? flushNow() : false))
+            .catch(() => false)
+    }
     if (writeTimer) {
         clearTimeout(writeTimer)
         writeTimer = null
@@ -415,8 +488,13 @@ export function flushNow() {
 }
 
 function scheduleWrite() {
-    if (!loaded) return
     dirty = true
+    if (!loaded) {
+        // 存储这次没读上来。改动先留在内存里，等 warmup 成功后一次性补写，
+        // 不能像以前那样直接 return —— 那等于把这次会话的所有消息都扔了。
+        pendingForLoad = true
+        return
+    }
     if (writeTimer) clearTimeout(writeTimer)
     writeTimer = setTimeout(() => {
         writeTimer = null

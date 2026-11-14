@@ -834,8 +834,13 @@ export default {
         this.finishLive(reply.content)
       }
       // usage 缺失时按字符估算，保证 Token 统计不会一直是 0
-      // token 统计要按整段会话估，不能用屏幕上渲染的那一批
-      const promptText = this.history.map(m => m.content).join("\n")
+      // 估算输入量只能用「这次真正发出去的消息」：此时 history 里已经写入了
+      // 刚收到的这条回复，整包拼进去会把输出重复算成输入，数字明显偏大
+      const promptMessages = this.history.slice()
+      if (promptMessages.length && promptMessages[promptMessages.length - 1].role === "assistant") {
+        promptMessages.pop()
+      }
+      const promptText = promptMessages.map(m => m.content).join("\n")
       recordUsage(reply.usage, reply.model, promptText, reply.content + (reply.reasoning || ""))
     } catch (err) {
       if (seq !== this.requestSeq) return
