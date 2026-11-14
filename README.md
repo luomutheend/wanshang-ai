@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="docs/images/icon-512.webp" width="104" alt="腕上AI">
-
 # 腕上AI
 
 **小米 Vela 手表上的 AI 助手快应用**
@@ -24,12 +22,6 @@
 - 长会话不会一次性铺开，默认只渲染最近 20 条，上滑再按批加载
 - 联网搜索的结果先摘出正文再喂给模型，而不是把十条摘要甩进去
 - 退出应用不丢会话，重启后能接着上次聊
-
-## 界面
-
-<div align="center">
-  <img src="docs/images/screen.webp" width="300" alt="对话界面">
-</div>
 
 ## 功能
 
