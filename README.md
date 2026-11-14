@@ -120,7 +120,7 @@ src/
 ├── pages/
 │   ├── splash/               启动页（轮询等 bootDone，带跳转重试）
 │   ├── index/                对话页：发送、渲染窗口、搜索状态、输入
-│   ├── settings/             设置、API Key、模型列表
+│   ├── settings/             设置、API Key、模型列表、AI 设定
 │   ├── history/  stats/  balance/  about/
 ├── deepseek/
 │   ├── client.js             对话与搜索客户端，两种模式统一成同一套返回
