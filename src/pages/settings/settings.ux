@@ -21,6 +21,11 @@
           <text class="row-value row-model">{{ modelLabel }}</text>
         </div>
 
+        <div class="row" @click="openPersona">
+          <text class="row-title">AI 设定</text>
+          <text class="row-value {{ hasPersona ? 'value-on' : '' }}">{{ personaName }}</text>
+        </div>
+
         <div class="row" @click="toggleThinking">
           <text class="row-title">深度思考</text>
           <text class="row-value {{ thinking ? 'value-on' : '' }}">{{ thinking ? "开" : "关" }}</text>
@@ -85,6 +90,7 @@ import { clearAllSessions } from "../../lib/sessions"
 import { getProfile } from "../../lib/deviceProfile"
 import { maskApiKey } from "../../lib/apiKeyStore"
 import { getProviderInfo, getModel, getApiKey } from "../../deepseek/client"
+import { getPersonaName, getPersonaPrompt } from "../../lib/persona"
 
 // 非思考模式下的回答上限；深度思考走单独的更大预算
 const LENGTHS = [
@@ -125,6 +131,8 @@ export default {
     keyText: "未设置",
     model: "deepseek-flash",
     modelLabel: "",
+    personaName: "默认助手",
+    hasPersona: false,
     modeName: "内置免费",
     isDeepSeek: false,
     thinking: false,
@@ -166,6 +174,8 @@ export default {
     this.keyText = this.isDeepSeek ? (key ? maskApiKey(key) : "未设置") : "无需填写"
     this.model = getModel()
     this.modelLabel = shortModel(this.model)
+    this.personaName = getPersonaName()
+    this.hasPersona = !!getPersonaPrompt()
     this.thinking = configOf().read(c => c.deepseekThinking)
     this.searchOn = configOf().read(c => c.deepseekSearch)
     this.askBeforeSearch = configOf().read(c => c.deepseekAskSearch) !== false
@@ -225,6 +235,10 @@ export default {
 
   openModels() {
     router.push({ uri: "pages/settings/models" })
+  },
+
+  openPersona() {
+    router.push({ uri: "pages/settings/persona" })
   },
 
   toggleThinking() {

@@ -101,6 +101,7 @@ import {
 } from "../../lib/sessions"
 import { recordUsage } from "../../lib/stats"
 import { getProfile } from "../../lib/deviceProfile"
+import { applyPersona } from "../../lib/persona"
 import {
   chat,
   chatProgressive,
@@ -520,7 +521,8 @@ export default {
 
   buildMessages(results, offline) {
     const context = buildSearchContext(results)
-    let system = SYSTEM_PROMPT
+    // 用户设定拼在基础提示词前面；没有设定时原样返回
+    let system = applyPersona(SYSTEM_PROMPT)
     if (context) {
       system += "\n\n用户这次的问题需要最新资料，提问后面会附上刚检索到的网页内容。" +
         "请优先据此回答，并在句末用 [1] 这样的编号标注来源。" +

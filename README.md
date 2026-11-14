@@ -28,6 +28,7 @@
 | 能力 | 说明 |
 | --- | --- |
 | 两种接口模式 | **内置免费**（自定义 OpenAI 兼容端点，装好即用）/ **DeepSeek 官方**（填自己的 Key） |
+| AI 设定 | 翻译官、耐心老师、程序员等 6 种预设人设，也可自写一段设定；作为 system 提示随每次提问发送 |
 | 联网搜索 | 基于 DeepSeek `/v1/tools/search`，固定取 10 条正文；结果质量差时自动换角度重搜一次 |
 | 深度思考 | 推理与正文共用预算，正文被挤空时自动降级补问 |
 | 模型切换 | 内置模式拉 `GET /models` 动态列表；官方模式在 flash / pro 间切换 |
@@ -51,8 +52,8 @@
 ## 安装
 
 1. 下载对应机型的 `.rpk`：
-   - 通用版（QuickJS）：[wanshang-ai-1.1.0.rpk](release/v1.1.0/wanshang-ai-1.1.0.rpk)
-   - Watch S5（JSC）：[wanshang-ai-1.1.0-s5-jsc.rpk](release/v1.1.0/wanshang-ai-1.1.0-s5-jsc.rpk)
+   - 通用版（QuickJS）：[wanshang-ai-1.2.0.rpk](release/v1.2.0/wanshang-ai-1.2.0.rpk)
+   - Watch S5（JSC）：[wanshang-ai-1.2.0-s5-jsc.rpk](release/v1.2.0/wanshang-ai-1.2.0-s5-jsc.rpk)
 2. 手表与手机保持连接，用小米运动健康 / Vela 调试工具推送安装
 3. 首次启动进设置 → 接口，选择模式
 
@@ -127,6 +128,7 @@ src/
 ├── lib/
 │   ├── sessions.js           会话持久化：KV + 文件双写，分批加载
 │   ├── store.js              配置与统计，三态读取防覆盖
+│   ├── persona.js            AI 角色设定：预设人设与自定义提示词
 │   ├── apiKeyStore.js        Key 独立存取
 │   └── ui.js                 页面池、GC
 └── components/

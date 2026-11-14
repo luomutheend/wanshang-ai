@@ -41,7 +41,10 @@ const DEFAULT_CONFIG = {
     // 模型判断「需要联网」时先问用户，关掉则按开关自动搜索
     deepseekAskSearch: true,
     // 页面返回动画（滑动过渡）。低端机型上关掉能少一次合成层动画
-    deepseekBackAnim: true
+    deepseekBackAnim: true,
+    // AI 角色设定：正文与展示名，空表示默认助手
+    aiPersona: "",
+    aiPersonaName: ""
 }
 
 function parsePayload(raw) {

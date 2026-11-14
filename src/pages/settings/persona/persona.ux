@@ -1,0 +1,470 @@
+<import name="page-header" src="@components/PageHeader/PageHeader.ux"></import>
+<import name="input-method" src="@components/InputMethod/InputMethod.ux"></import>
+
+<template>
+  <div class="page">
+    <scroll class="scroll {{ scrclass }}" scroll-y="true" bounces="true">
+      <page-header title="AI 设定"></page-header>
+
+      <text class="tip" style="margin-top: {{ contentTop }}px;">设定会作为系统提示随每次提问发送，改变回答的角色和语气</text>
+
+      <div class="settings-list">
+        <div class="row" @click="pickPreset(0)">
+          <div class="row-main">
+            <text class="row-name">默认助手</text>
+            <text class="row-brief">简洁直接，不带腔调</text>
+          </div>
+          <text class="check" if="{{ sel0 }}">✓</text>
+        </div>
+
+        <div class="row" @click="pickPreset(1)">
+          <div class="row-main">
+            <text class="row-name">翻译官</text>
+            <text class="row-brief">只给译文，不加解释</text>
+          </div>
+          <text class="check" if="{{ sel1 }}">✓</text>
+        </div>
+
+        <div class="row" @click="pickPreset(2)">
+          <div class="row-main">
+            <text class="row-name">耐心老师</text>
+            <text class="row-brief">拆成小步骤讲</text>
+          </div>
+          <text class="check" if="{{ sel2 }}">✓</text>
+        </div>
+
+        <div class="row" @click="pickPreset(3)">
+          <div class="row-main">
+            <text class="row-name">程序员</text>
+            <text class="row-brief">先给代码，再说坑</text>
+          </div>
+          <text class="check" if="{{ sel3 }}">✓</text>
+        </div>
+
+        <div class="row" @click="pickPreset(4)">
+          <div class="row-main">
+            <text class="row-name">文案助手</text>
+            <text class="row-brief">一次给三个版本</text>
+          </div>
+          <text class="check" if="{{ sel4 }}">✓</text>
+        </div>
+
+        <div class="row" @click="pickPreset(5)">
+          <div class="row-main">
+            <text class="row-name">树洞</text>
+            <text class="row-brief">先接情绪，再给建议</text>
+          </div>
+          <text class="check" if="{{ sel5 }}">✓</text>
+        </div>
+
+        <div class="row" @click="showCustom">
+          <div class="row-main">
+            <text class="row-name">自定义</text>
+            <text class="row-brief">{{ customBrief }}</text>
+          </div>
+          <text class="check" if="{{ selCustom }}">✓</text>
+        </div>
+      </div>
+
+      <text class="footer">设定只影响语气和角色，不会让模型知道你的私人信息</text>
+    </scroll>
+
+    <div class="ime" show="{{ !hideInput }}">
+      <div class="ime-panel" style="height: {{ panelHeight }}px;">
+        <scroll id="imePreview" class="ime-preview-box" scroll-y="true" bounces="true">
+          <div class="ime-preview-inner" style="padding-top: {{ previewTop }}px; padding-left: {{ previewX }}px; padding-right: {{ previewX }}px; padding-bottom: 104px;">
+            <text class="ime-preview">{{ text || "例如：你是一名健身教练，回答要具体到组数和次数" }}</text>
+          </div>
+        </scroll>
+        <div class="ime-actions">
+          <text class="ime-count">{{ countText }}</text>
+          <text class="ime-fold" @click="hideKeyboard">完成</text>
+          <text class="ime-save" @click="saveCustom">保存</text>
+        </div>
+      </div>
+      <input-method
+        hide="{{ hideInput }}"
+        keyboardtype="QWERTY"
+        screentype="{{ screenShape }}"
+        bottomsafe="{{ kbBottom }}"
+        vibratemode="short"
+        @complete="onKeyInput"
+        @delete="onKeyDelete"
+      ></input-method>
+    </div>
+  </div>
+</template>
+
+<script>
+import prompt from "@system.prompt"
+import router from "@system.router"
+import { getProfile } from "../../../lib/deviceProfile"
+import {
+  PERSONA_PRESETS,
+  PERSONA_MAX_LENGTH,
+  getPersonaPrompt,
+  getPersonaId,
+  savePersona
+} from "../../../lib/persona"
+
+export default {
+  private: {
+    scrclass: "",
+    panelHeight: 145,
+    contentTop: 0,
+    previewTop: 8,
+    previewX: 18,
+    kbBottom: 0,
+    screenShape: "circle",
+    hideInput: true,
+    text: "",
+    countText: "0/" + PERSONA_MAX_LENGTH,
+    customBrief: "写一段属于你的设定",
+    sel0: true,
+    sel1: false,
+    sel2: false,
+    sel3: false,
+    sel4: false,
+    sel5: false,
+    selCustom: false
+  },
+
+  onInit() {
+    if (global.ui && global.ui.InitPage) global.ui.InitPage(this, "pages/settings/persona")
+    const profile = global.UI_PROFILE || getProfile()
+    this.panelHeight = profile.panelHeight
+    this.contentTop = profile.contentTop
+    this.previewTop = profile.previewTop
+    this.previewX = profile.previewX
+    this.kbBottom = profile.kbBottom
+    this.screenShape = profile.kbShape
+    this.refresh()
+  },
+
+  onShow() {
+    if (this.hideInput) this.refresh()
+  },
+
+  refresh() {
+    // 选中态逐个标记，不用数组下标拼模板属性——Vela 上那类动态表达式不稳
+    const id = getPersonaId()
+    this.sel0 = id === "default"
+    this.sel1 = id === "translator"
+    this.sel2 = id === "teacher"
+    this.sel3 = id === "coder"
+    this.sel4 = id === "writer"
+    this.sel5 = id === "listener"
+    this.selCustom = id === "custom"
+    const mine = getPersonaPrompt()
+    this.customBrief = this.selCustom ? mine.slice(0, 16) + (mine.length > 16 ? "…" : "") : "写一段属于你的设定"
+  },
+
+  pickPreset(index) {
+    const item = PERSONA_PRESETS[index]
+    if (!item) return
+    savePersona(item.name, item.prompt).then(() => {
+      this.refresh()
+      prompt.showToast({ message: item.prompt ? "已设为「" + item.name + "」" : "已恢复默认助手" })
+    }).catch(() => {
+      prompt.showToast({ message: "保存失败，请重试" })
+    })
+  },
+
+  showCustom() {
+    // 预设文案不灌进编辑器：手表上改两百字不现实，从空开始写反而顺手
+    this.text = this.selCustom ? getPersonaPrompt() : ""
+    this.updateCount()
+    this.hideInput = false
+    this.scrollPreviewToEnd()
+  },
+
+  hideKeyboard() {
+    this.hideInput = true
+    const saved = this.commit()
+    if (saved) prompt.showToast({ message: "已保存" })
+  },
+
+  onKeyInput(evt) {
+    const content = evt && evt.detail ? evt.detail.content : ""
+    if (!content) return
+    if (this.text.length >= PERSONA_MAX_LENGTH) {
+      prompt.showToast({ message: "最多 " + PERSONA_MAX_LENGTH + " 字" })
+      return
+    }
+    this.text += content
+    if (this.text.length > PERSONA_MAX_LENGTH) {
+      this.text = this.text.slice(0, PERSONA_MAX_LENGTH)
+    }
+    this.updateCount()
+    this.scrollPreviewToEnd()
+  },
+
+  onKeyDelete() {
+    this.text = this.text.slice(0, -1)
+    this.updateCount()
+    this.scrollPreviewToEnd()
+  },
+
+  updateCount() {
+    this.countText = this.text.length + "/" + PERSONA_MAX_LENGTH
+  },
+
+  scrollPreviewToEnd() {
+    setTimeout(() => {
+      try {
+        const el = this.$element("imePreview")
+        if (el && el.scrollTo) el.scrollTo({ top: 99999 })
+      } catch (e) {
+        // 键盘还没建出来时忽略
+      }
+    }, 30)
+  },
+
+  /** 收起键盘时自动落盘；返回是否真的写了 */
+  commit() {
+    const text = String(this.text || "").trim()
+    const current = getPersonaPrompt()
+    if (text === current) return false
+    savePersona(text ? "自定义" : "", text).catch(() => {
+      prompt.showToast({ message: "保存失败，请重试" })
+    })
+    this.refresh()
+    return true
+  },
+
+  saveCustom() {
+    const text = String(this.text || "").trim()
+    this.hideInput = true
+    if (!text) {
+      savePersona("", "").then(() => {
+        this.refresh()
+        prompt.showToast({ message: "已恢复默认助手" })
+        router.back()
+      })
+      return
+    }
+    savePersona("自定义", text).then(() => {
+      this.refresh()
+      prompt.showToast({ message: "已保存自定义设定" })
+      router.back()
+    }).catch(() => {
+      prompt.showToast({ message: "保存失败，请重试" })
+    })
+  },
+
+  onBackPress() {
+    if (!this.hideInput) {
+      this.hideInput = true
+      this.commit()
+      return true
+    }
+    if (global.ui && global.ui.OnBackPressTriggered) {
+      global.ui.OnBackPressTriggered()
+      return true
+    }
+    return false
+  }
+}
+</script>
+
+<style lang="less">
+@import "src/less/global.less";
+
+.tip {
+  width: 84%;
+  margin-top: 6px;
+  font-size: 21px;
+  line-height: 30px;
+  color: rgba(255, 255, 255, 0.42);
+  text-align: center;
+}
+
+.settings-list {
+  width: 92%;
+  flex-direction: column;
+  margin-top: 14px;
+}
+
+.row {
+  width: 100%;
+  height: 104px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 26px;
+  padding-right: 26px;
+  border-radius: 36px;
+  background-color: #1e1e1e;
+  margin-bottom: 10px;
+}
+
+.row-main {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.row-name {
+  font-size: 31px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.row-brief {
+  margin-top: 4px;
+  font-size: 21px;
+  color: rgba(255, 255, 255, 0.42);
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.check {
+  flex-shrink: 0;
+  width: 40px;
+  font-size: 34px;
+  color: #4da3ff;
+  text-align: right;
+}
+
+.footer {
+  margin-top: 18px;
+  margin-bottom: 60px;
+  width: 84%;
+  font-size: 20px;
+  line-height: 30px;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: center;
+}
+
+@media screen and (shape: circle) {
+  .settings-list {
+    width: 86%;
+  }
+  .tip {
+    width: 74%;
+  }
+  .footer {
+    width: 72%;
+  }
+}
+
+/* 手环窄屏 */
+@media (max-width: 190) {
+  .row {
+    height: 92px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .row-name {
+    font-size: 25px;
+  }
+  .row-brief {
+    font-size: 18px;
+  }
+  .check {
+    width: 32px;
+    font-size: 27px;
+  }
+  .tip {
+    font-size: 18px;
+    line-height: 26px;
+  }
+  .footer {
+    font-size: 17px;
+    line-height: 25px;
+  }
+  .ime-preview {
+    font-size: 25px;
+    line-height: 32px;
+  }
+  .ime-fold {
+    font-size: 23px;
+  }
+  .ime-save {
+    font-size: 24px;
+  }
+  .ime-count {
+    font-size: 18px;
+  }
+}
+
+/* 输入层：与 API Key 页保持同一套结构 */
+.ime {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: black;
+}
+
+.ime-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background-color: black;
+}
+
+.ime-preview-box {
+  width: 100%;
+  height: 100%;
+}
+
+.ime-preview-inner {
+  width: 100%;
+  flex-direction: column;
+  padding: 8px 18px 104px;
+}
+
+.ime-preview {
+  width: 100%;
+  font-size: 29px;
+  line-height: 38px;
+  color: #ffffff;
+}
+
+.ime-actions {
+  position: absolute;
+  left: 0;
+  bottom: 8px;
+  width: 100%;
+  height: 72px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.62);
+}
+
+.ime-count {
+  flex: 1;
+  margin-left: 20px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.ime-fold {
+  width: 132px;
+  height: 64px;
+  border-radius: 32px;
+  background-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-size: 27px;
+  text-align: center;
+  line-height: 64px;
+  margin-right: 8px;
+}
+
+.ime-save {
+  width: 152px;
+  height: 64px;
+  border-radius: 32px;
+  background-color: #0d6eff;
+  color: #ffffff;
+  font-size: 28px;
+  text-align: center;
+  line-height: 64px;
+  margin-left: 8px;
+  margin-right: 20px;
+}
+</style>
