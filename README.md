@@ -60,7 +60,9 @@
 
 ## 安装
 
-1. 下载对应机型的 `.rpk`
+1. 下载对应机型的 `.rpk`：
+   - 通用版（QuickJS）：[wanshang-ai-1.1.0.rpk](release/v1.1.0/wanshang-ai-1.1.0.rpk)
+   - Watch S5（JSC）：[wanshang-ai-1.1.0-s5-jsc.rpk](release/v1.1.0/wanshang-ai-1.1.0-s5-jsc.rpk)
 2. 手表与手机保持连接，用小米运动健康 / Vela 调试工具推送安装
 3. 首次启动进设置 → 接口，选择模式
 
